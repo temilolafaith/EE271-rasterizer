@@ -289,10 +289,10 @@ module bbox
     assert property(@(posedge clk) $onehot(bbox_sel_R10H[1][1]));
 
     //Assertions to check UR is never less than LL (assign validTri_R10H???)
-    if (box_R10S[0][0] > box_R10S[1][0] || box_R10S[0][1] > box_R10S[1][1])
-        assign validTri_R10H = 1'b0;
-    else
-        assign validTri_R10H = 1'b1;
+    // START CODE HERE
+    assert property (@(posedge clk) box_R10S[0][0] <= box_R10S[1][0]);
+    assert property (@(posedge clk) box_R10S[0][1] <= box_R10S[1][1]);
+
     // END CODE HERE
 
 
@@ -324,16 +324,15 @@ for(genvar i = 0; i < 2; i = i + 1) begin
 
         always_comb begin
             //Integer Portion of LL and UR Remains the Same
-            rounded_box_R10S[i][j][SIGFIG-1:RADIX]
-                = box_R10S[i][j][SIGFIG-1:RADIX];
+            rounded_box_R10S[i][j][SIGFIG-1:RADIX] = box_R10S[i][j][SIGFIG-1:RADIX];
             //////// ASSIGN FRACTIONAL PORTION
             // START CODE HERE
             case(subSample_RnnnnU)
-                4'b0001: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b111, (RADIX-3){1'b0}};
-                4'b0010: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b110, (RADIX-3){1'b0}};
-                4'b0100: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b100, (RADIX-3){1'b0}};
-                4'b1000: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b000, (RADIX-3){1'b0}};
-                default: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b111, (RADIX-3){1'b0}};
+                4'b0001: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b111, 7'b0000000}; //(RADIX-3){1'b0}
+                4'b0010: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b110, 7'b0000000};
+                4'b0100: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b100, 7'b0000000};
+                4'b1000: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b000, 7'b0000000};
+                default: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b111, 7'b0000000};
             endcase
             // END CODE HERE
 
@@ -364,10 +363,15 @@ endgenerate
 
         //////// ASSIGN "out_box_R10S" and "outvalid_R10H"
         // START CODE HERE (use 24'b0???)
-        assign out_box_R10S[1][0] = (rounded_box_R10S[1][0] < screen_RnnnnS[0]) ? rounded_box_R10S[1][0] : screen_RnnnnS[0];
-        assign out_box_R10S[1][1] = (rounded_box_R10S[1][1] < screen_RnnnnS[1]) ? rounded_box_R10S[1][1] : screen_RnnnnS[1];
-        assign out_box_R10S[0][0] = (rounded_box_R10S[0][0] > 1'b0) ? rounded_box_R10S[0][0] : 1'b0;
-        assign out_box_R10S[0][1] = (rounded_box_R10S[0][1] > 1'b0) ? rounded_box_R10S[0][1] : 1'b0;
+        // assign out_box_R10S[1][0] = (rounded_box_R10S[1][0] < screen_RnnnnS[0]) ? rounded_box_R10S[1][0] : screen_RnnnnS[0];
+        // assign out_box_R10S[1][1] = (rounded_box_R10S[1][1] < screen_RnnnnS[1]) ? rounded_box_R10S[1][1] : screen_RnnnnS[1];
+        // assign out_box_R10S[0][0] = (rounded_box_R10S[0][0] > 1'b0) ? rounded_box_R10S[0][0] : 1'b0;
+        // assign out_box_R10S[0][1] = (rounded_box_R10S[0][1] > 1'b0) ? rounded_box_R10S[0][1] : 1'b0;
+
+        out_box_R10S[1][0] = (rounded_box_R10S[1][0] < screen_RnnnnS[0]) ? rounded_box_R10S[1][0] : screen_RnnnnS[0];
+        out_box_R10S[1][1] = (rounded_box_R10S[1][1] < screen_RnnnnS[1]) ? rounded_box_R10S[1][1] : screen_RnnnnS[1];
+        out_box_R10S[0][0] = (rounded_box_R10S[0][0] > 1'b0) ? rounded_box_R10S[0][0] : 1'b0;
+        out_box_R10S[0][1] = (rounded_box_R10S[0][1] > 1'b0) ? rounded_box_R10S[0][1] : 1'b0;
 
         //Assertions to check BBox is not totally out of screen
         if (out_box_R10S[0][0] > screen_RnnnnS[0] && out_box_R10S[0][1] > screen_RnnnnS[1] && out_box_R10S[1][0] > screen_RnnnnS[0] && out_box_R10S[1][1] > screen_RnnnnS[1])
