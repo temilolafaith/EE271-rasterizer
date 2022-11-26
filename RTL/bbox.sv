@@ -1,71 +1,99 @@
 /*
- *  Bounding Box Sample Test Iteration
+ * Bounding Box Module
  *
- *  Inputs:
- *    BBox and triangle Information
+ * Inputs:
+ *   3 x,y,z vertices corresponding to tri
+ *   1 valid bit, indicating triangle is valid data
  *
- *  Outputs:
- *    Subsample location and triangle Information
+ *  Config Inputs:
+ *   2 x,y vertices indicating screen dimensions
+ *   1 integer representing square root of SS (16MSAA->4)
+ *      we will assume config values are held in some
+ *      register and are valid given a valid triangle
  *
- *  Function:
- *    Iterate from left to right bottom to top
- *    across the bounding box.
+ *  Control Input:
+ *   1 halt signal indicating that no work should be done
  *
- *    While iterating set the halt signal in
- *    order to hold the bounding box pipeline in
- *    place.
+ * Outputs:
+ *   2 vertices describing a clamped bounding box
+ *   1 Valid signal indicating that bounding
+ *           box and triangle value is valid
+ *   3 x,y vertices corresponding to tri
+ *
+ * Global Signals:
+ *   clk, rst
+ *
+ * Function:
+ *   Determine a bounding box for the triangle
+ *   represented by the vertices.
+ *
+ *   Clamp the Bounding Box to the subsample pixel
+ *   space
+ *
+ *   Clip the Bounding Box to Screen Space
+ *
+ *   Halt operating but retain values if next stage is busy
  *
  *
  * Long Description:
- *    The iterator starts in the waiting state,
- *    when a valid triangle bounding box
- *    appears at the input. It will enter the
- *    testing state the next cycle with a
- *    sample equivelant to the lower left
- *    cooridinate of the bounding box.
+ *   This bounding box block accepts a triangle described with three
+ *   vertices and determines a set of sample points to test against
+ *   the triangle.  These sample points correspond to the
+ *   either the pixels in the final image or the pixel fragments
+ *   that compose the pixel if multisample anti-aliasing (MSAA)
+ *   is enabled.
  *
- *    While in the testing state, the next sample
- *    for each cycle should be one sample interval
- *    to the right, except when the current sample
- *    is at the right edge.  If the current sample
- *    is at the right edge, the next sample should
- *    be one row up.  Additionally, if the current
- *    sample is on the top row and the right edge,
- *    next cycles sample should be invalid and
- *    equivelant to the lower left vertice and
- *    next cycles state should be waiting.
+ *   The inputs to the box are clocked with a bank of dflops.
+ *
+ *   After the data is clocked, a bounding box is determined
+ *   for the triangle. A bounding box can be determined
+ *   through calculating the maxima and minima for x and y to
+ *   generate a lower left vertice and upper right
+ *   vertice.  This data is then clocked.
+ *
+ *   The bounding box next needs to be clamped to the fragment grid.
+ *   This can be accomplished through rounding the bounding box values
+ *   to the fragment grid.  Additionally, any sample points that exist
+ *   outside of screen space should be rejected.  So the bounding box
+ *   can be clipped to the visible screen space.  This clipping is done
+ *   using the screen signal.
+ *
+ *   The Halt signal is utilized to hold the current triangle bounding box.
+ *   This is because one bounding box operation could correspond to
+ *   multiple sample test operations later in the pipe.  As these samples
+ *   can take a number of cycles to complete, the data held in the bounding
+ *   box stage needs to be preserved.  The halt signal is also required for
+ *   when the write device is full/busy.
+ *
+ *   The valid signal is utilized to indicate whether or not a triangle
+ *   is actual data.  This can be useful if the device being read from,
+ *   has no more triangles.
+ *
  *
  *
  *   Author: John Brunhaver
  *   Created:      Thu 07/23/09
- *   Last Updated: Tue 10/01/10
+ *   Last Updated: Fri 09/30/10
  *
  *   Copyright 2009 <jbrunhaver@gmail.com>
- *
  */
 
-/* ***************************************************************************
- * Change bar:
- * -----------
- * Date           Author    Description
- * Sep 19, 2012   jingpu    ported from John's original code to Genesis
- *
- * ***************************************************************************/
 
 /* A Note on Signal Names:
  *
- * Most signals have a suffix of the form _RxxN
+ * Most signals have a suffix of the form _RxxxxN
  * where R indicates that it is a Raster Block signal
- * xx indicates the clock slice that it belongs to
- * and N indicates the type of signal that it is.
- * H indicates logic high, L indicates logic low,
- * U indicates unsigned fixed point, and S indicates
- * signed fixed point.
+ * xxxx indicates the clock slice that it belongs to
+ * N indicates the type of signal that it is.
+ *    H indicates logic high,
+ *    L indicates logic low,
+ *    U indicates unsigned fixed point,
+ *    S indicates signed fixed point.
  *
- * For all the signed fixed point signals (logic signed [`$sig_fig`-1:0]),
- * their highest `$sig_fig-$radix` bits, namely [`$sig_fig-1`:`$radix`]
+ * For all the signed fixed point signals (logic signed [SIGFIG-1:0]),
+ * their highest `$sig_fig-$radix` bits, namely [`$sig_fig-1`:RADIX]
  * represent the integer part of the fixed point number,
- * while the lowest `$radix` bits, namely [`$radix-1`:0]
+ * while the lowest RADIX bits, namely [`$radix-1`:0]
  * represent the fractional part of the fixed point number.
  *
  *
@@ -81,53 +109,361 @@
  *
  */
 
-module test_iterator
+module bbox
 #(
-    parameter SIGFIG = 24, // Bits in color and position.
-    parameter RADIX = 10, // Fraction bits in color and position
-    parameter VERTS = 3, // Maximum Vertices in triangle
-    parameter AXIS = 3, // Number of axis foreach vertex 3 is (x,y,z).
-    parameter COLORS = 3, // Number of color channels
-    parameter PIPE_DEPTH = 1, // How many pipe stages are in this block
-    parameter MOD_FSM = 0 // Use Modified FSM to eliminate a wait state
+    parameter SIGFIG        = 24, // Bits in color and position.
+    parameter RADIX         = 10, // Fraction bits in color and position
+    parameter VERTS         = 3, // Maximum Vertices in triangle
+    parameter AXIS          = 3, // Number of axis foreach vertex 3 is (x,y,z).
+    parameter COLORS        = 3, // Number of color channels
+    parameter PIPE_DEPTH    = 3 // How many pipe stages are in this block
 )
 (
     //Input Signals
-    input logic signed [SIGFIG-1:0]     tri_R13S[VERTS-1:0][AXIS-1:0], //triangle to Iterate Over
-    input logic unsigned [SIGFIG-1:0]   color_R13U[COLORS-1:0] , //Color of triangle
-    input logic signed [SIGFIG-1:0]     box_R13S[1:0][1:0], //Box to iterate for subsamples
-    input logic                             validTri_R13H, //triangle is valid
+    input logic signed [SIGFIG-1:0]     tri_R10S[VERTS-1:0][AXIS-1:0] , // Sets X,Y Fixed Point Values
+    input logic unsigned [SIGFIG-1:0]   color_R10U[COLORS-1:0] , // Color of Tri
+    input logic                             validTri_R10H , // Valid Data for Operation
 
     //Control Signals
-    input logic [3:0]   subSample_RnnnnU , //Subsample width
-    output logic        halt_RnnnnL , //Halt -> hold current microtriangle
-    //Note that this block generates
+    input logic                         halt_RnnnnL , // Indicates No Work Should Be Done
+    input logic signed [SIGFIG-1:0] screen_RnnnnS[1:0] , // Screen Dimensions
+    input logic [3:0]                   subSample_RnnnnU , // SubSample_Interval
+
     //Global Signals
     input logic clk, // Clock
     input logic rst, // Reset
 
-    //Outputs
-    output logic signed [SIGFIG-1:0]    tri_R14S[VERTS-1:0][AXIS-1:0], //triangle to Sample Test
-    output logic unsigned [SIGFIG-1:0]  color_R14U[COLORS-1:0] , //Color of triangle
-    output logic signed [SIGFIG-1:0]    sample_R14S[1:0], //Sample Location to Be Tested
-    output logic                            validSamp_R14H //Sample and triangle are Valid
+    //Outout Signals
+    output logic signed [SIGFIG-1:0]    tri_R13S[VERTS-1:0][AXIS-1:0], // 4 Sets X,Y Fixed Point Values
+    output logic unsigned [SIGFIG-1:0]  color_R13U[COLORS-1:0] , // Color of Tri
+    output logic signed [SIGFIG-1:0]    box_R13S[1:0][1:0], // 2 Sets X,Y Fixed Point Values
+    output logic                            validTri_R13H                  // Valid Data for Operation
 );
 
-    // This module implement a Moore machine to iterarte sample points in bbox
-    // Recall: a Moore machine is an FSM whose output values are determined
-    // solely by its current state.
-    // A simple way to build a Moore machine is to make states for every output
-    // and the values of the current states are the outputs themselves
+    //Signals In Clocking Order
 
-    // Now we create the signals for the next states of each outputs and
-    // then instantiate registers for storing these states
-    logic signed [SIGFIG-1:0]       next_tri_R14S[VERTS-1:0][AXIS-1:0];
-    logic unsigned  [SIGFIG-1:0]    next_color_R14U[COLORS-1:0] ;
-    logic signed [SIGFIG-1:0]       next_sample_R14S[1:0];
-    logic                               next_validSamp_R14H;
-    logic                               next_halt_RnnnnL;
+    //Begin R10 Signals
 
-    // Instantiate registers for storing these states
+    // Step 1 Result: LL and UR X, Y Fixed Point Values determined by calculating min/max vertices
+    // box_R10S[0][0]: LL X
+    // box_R10S[0][1]: LL Y
+    // box_R10S[1][0]: UR X
+    // box_R10S[1][1]: UR Y
+    logic signed [SIGFIG-1:0]   box_R10S[1:0][1:0];
+    // Step 2 Result: LL and UR Rounded Down to SubSample Interval
+    logic signed [SIGFIG-1:0]   rounded_box_R10S[1:0][1:0];
+    // Step 3 Result: LL and UR X, Y Fixed Point Values after Clipping
+    logic signed [SIGFIG-1:0]   out_box_R10S[1:0][1:0];      // bounds for output
+    // Step 3 Result: valid if validTri_R10H && BBox within screen
+    logic                           outvalid_R10H;               // output is valid
+
+    //End R10 Signals
+
+    // Begin output for retiming registers
+    logic signed [SIGFIG-1:0]   tri_R13S_retime[VERTS-1:0][AXIS-1:0]; // 4 Sets X,Y Fixed Point Values
+    logic unsigned [SIGFIG-1:0] color_R13U_retime[COLORS-1:0];        // Color of Tri
+    logic signed [SIGFIG-1:0]   box_R13S_retime[1:0][1:0];             // 2 Sets X,Y Fixed Point Values
+    logic                           validTri_R13H_retime ;                 // Valid Data for Operation
+    // End output for retiming registers
+
+    // ********** Step 1:  Determining a Bounding Box **********
+    // Here you need to determine the bounding box by comparing the vertices
+    // and assigning box_R10S to be the proper coordinates
+
+    // START CODE HERE
+
+    // This select signal structure may help you in selecting your bbox coordinates
+    logic [2:0] bbox_sel_R10H [1:0][1:0];
+    // The above structure consists of a 3-bit select signal for each coordinate of the 
+    // bouding box. The leftmost [1:0] dimensions refer to LL/UR, while the rightmost 
+    // [1:0] dimensions refer to X or Y coordinates. Each select signal should be a 3-bit 
+    // one-hot signal, where the bit that is high represents which one of the 3 triangle vertices 
+    // should be chosen for that bbox coordinate. As an example, if we have: bbox_sel_R10H[0][0] = 3'b001
+    // then this indicates that the lower left x-coordinate of your bounding box should be assigned to the 
+    // x-coordinate of triangle "vertex a". 
+    
+    //  DECLARE ANY OTHER SIGNALS YOU NEED
+    logic unsigned [RADIX-1:0] mask; // mask used to bit and with box_R10S[i][j][RADIX-1:0] (fractional part)
+    // Try declaring an always_comb block to assign values to box_R10S
+    always_comb begin
+        if ((tri_R10S[0][0] < tri_R10S[1][0]) && (tri_R10S[1][0] < tri_R10S[2][0])) begin
+            bbox_sel_R10H[0][0] = 3'b001;
+            bbox_sel_R10H[1][0] = 3'b100;
+        end
+        else if ((tri_R10S[1][0] < tri_R10S[0][0]) && (tri_R10S[0][0] < tri_R10S[2][0])) begin
+            bbox_sel_R10H[0][0] = 3'b010;
+            bbox_sel_R10H[1][0] = 3'b100;
+        end
+        else if ((tri_R10S[0][0] < tri_R10S[2][0]) && (tri_R10S[2][0] < tri_R10S[1][0])) begin
+            bbox_sel_R10H[0][0] = 3'b001;
+            bbox_sel_R10H[1][0] = 3'b010;
+        end
+        else if ((tri_R10S[1][0] < tri_R10S[2][0]) && (tri_R10S[2][0] < tri_R10S[0][0])) begin
+            bbox_sel_R10H[0][0] = 3'b010;
+            bbox_sel_R10H[1][0] = 3'b001;
+        end
+        else if ((tri_R10S[2][0] < tri_R10S[0][0]) && (tri_R10S[0][0] < tri_R10S[1][0])) begin
+            bbox_sel_R10H[0][0] = 3'b100;
+            bbox_sel_R10H[1][0] = 3'b010;
+        end
+        else if ((tri_R10S[2][0] < tri_R10S[1][0]) && (tri_R10S[1][0] < tri_R10S[0][0])) begin
+            bbox_sel_R10H[0][0] = 3'b100;
+            bbox_sel_R10H[1][0] = 3'b001;
+        end
+        else begin // weird situation, should be marked as invalid
+            bbox_sel_R10H[0][0] = 3'b001;
+            bbox_sel_R10H[1][0] = 3'b001;
+        end
+
+        if ((tri_R10S[0][1] < tri_R10S[1][1]) && (tri_R10S[1][1] < tri_R10S[2][1])) begin
+            bbox_sel_R10H[0][1] = 3'b001;
+            bbox_sel_R10H[1][1] = 3'b100;
+        end
+        else if ((tri_R10S[1][1] < tri_R10S[0][1]) && (tri_R10S[0][1] < tri_R10S[2][1])) begin
+            bbox_sel_R10H[0][1] = 3'b010;
+            bbox_sel_R10H[1][1] = 3'b100;
+        end
+        else if ((tri_R10S[0][1] < tri_R10S[2][1]) && (tri_R10S[2][1] < tri_R10S[1][1])) begin
+            bbox_sel_R10H[0][1] = 3'b001;
+            bbox_sel_R10H[1][1] = 3'b010;
+        end
+        else if ((tri_R10S[1][1] < tri_R10S[2][1]) && (tri_R10S[2][1] < tri_R10S[0][1])) begin
+            bbox_sel_R10H[0][1] = 3'b010;
+            bbox_sel_R10H[1][1] = 3'b001;
+        end
+        else if ((tri_R10S[2][1] < tri_R10S[0][1]) && (tri_R10S[0][1] < tri_R10S[1][1])) begin
+            bbox_sel_R10H[0][1] = 3'b100;
+            bbox_sel_R10H[1][1] = 3'b010;
+        end
+        else if ((tri_R10S[2][1] < tri_R10S[1][1]) && (tri_R10S[1][1] < tri_R10S[0][1])) begin
+            bbox_sel_R10H[0][1] = 3'b100;
+            bbox_sel_R10H[1][1] = 3'b001;
+        end
+        else begin // weird situation, should be marked as invalid
+            bbox_sel_R10H[0][1] = 3'b001;
+            bbox_sel_R10H[1][1] = 3'b001;
+        end
+
+        case(bbox_sel_R10H[0][0])
+            3'b001: box_R10S[0][0] = tri_R10S[0][0];
+            3'b010: box_R10S[0][0] = tri_R10S[1][0];
+            3'b100: box_R10S[0][0] = tri_R10S[2][0];
+            default: box_R10S[0][0] = tri_R10S[0][0];
+        endcase
+
+        case(bbox_sel_R10H[0][1])
+            3'b001: box_R10S[0][1] = tri_R10S[0][1];
+            3'b010: box_R10S[0][1] = tri_R10S[1][1];
+            3'b100: box_R10S[0][1] = tri_R10S[2][1];
+            default: box_R10S[0][1] = tri_R10S[0][1];
+        endcase
+
+        case(bbox_sel_R10H[1][0])
+            3'b001: box_R10S[1][0] = tri_R10S[0][0];
+            3'b010: box_R10S[1][0] = tri_R10S[1][0];
+            3'b100: box_R10S[1][0] = tri_R10S[2][0];
+            default: box_R10S[1][0] = tri_R10S[0][0];
+        endcase
+
+        case(bbox_sel_R10H[1][1])
+            3'b001: box_R10S[1][1] = tri_R10S[0][1];
+            3'b010: box_R10S[1][1] = tri_R10S[1][1];
+            3'b100: box_R10S[1][1] = tri_R10S[2][1];
+            default: box_R10S[1][1] = tri_R10S[0][1];
+        endcase
+    end
+
+    // END CODE HERE
+
+    // Assertions to check if box_R10S is assigned properly
+    // We want to check the following properties:
+    // 1) Each of the coordinates box_R10S are always and uniquely assigned
+    // 2) Upper right coordinate is never less than lower left
+
+    // START CODE HERE
+    //Assertions to check if all cases are covered and assignments are unique 
+    // (already done for you if you use the bbox_sel_R10H select signal as declared)
+    assert property(@(posedge clk) $onehot(bbox_sel_R10H[0][0]));
+    assert property(@(posedge clk) $onehot(bbox_sel_R10H[0][1]));
+    assert property(@(posedge clk) $onehot(bbox_sel_R10H[1][0]));
+    assert property(@(posedge clk) $onehot(bbox_sel_R10H[1][1]));
+
+    //Assertions to check UR is never less than LL (assign validTri_R10H???)
+    // START CODE HERE
+    assert property (@(posedge clk) box_R10S[0][0] <= box_R10S[1][0]);
+    assert property (@(posedge clk) box_R10S[0][1] <= box_R10S[1][1]);
+
+    // END CODE HERE
+
+
+    // ***************** End of Step 1 *********************
+
+
+    // ********** Step 2:  Round Values to Subsample Interval **********
+
+    // We will use the floor operation for rounding.
+    // To floor a signal, we simply turn all of the bits
+    // below a specific RADIX to 0.
+    // The complication here is that there are 4 setting.
+    // 1x MSAA eq. to 1 sample per pixel
+    // 4x MSAA eq to 4 samples per pixel, a sample is
+    // half a pixel on a side
+    // 16x MSAA eq to 16 sample per pixel, a sample is
+    // a quarter pixel on a side.
+    // 64x MSAA eq to 64 samples per pixel, a sample is
+    // an eighth of a pixel on a side.
+
+    // Note: Cleverly converting the MSAA signal
+    //       to a mask would allow you to do this operation
+    //       as a bitwise and operation.
+
+//Round LowerLeft and UpperRight for X and Y
+generate
+for(genvar i = 0; i < 2; i = i + 1) begin
+    for(genvar j = 0; j < 2; j = j + 1) begin
+
+        always_comb begin
+            //Integer Portion of LL and UR Remains the Same
+            rounded_box_R10S[i][j][SIGFIG-1:RADIX] = box_R10S[i][j][SIGFIG-1:RADIX];
+            //////// ASSIGN FRACTIONAL PORTION
+            // START CODE HERE
+            case(subSample_RnnnnU)
+                4'b0001: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b111, {RADIX-3{1'b0}}}; //(RADIX-3){1'b0}
+                4'b0010: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b110, {RADIX-3{1'b0}}};
+                4'b0100: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b100, {RADIX-3{1'b0}}};
+                4'b1000: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b000, {RADIX-3{1'b0}}};
+            endcase
+            // END CODE HERE
+
+        end // always_comb
+
+    end
+end
+endgenerate
+
+    //Assertion to help you debug errors in rounding
+    assert property( @(posedge clk) (box_R10S[0][0] - rounded_box_R10S[0][0]) <= {subSample_RnnnnU,7'b0});
+    assert property( @(posedge clk) (box_R10S[0][1] - rounded_box_R10S[0][1]) <= {subSample_RnnnnU,7'b0});
+    assert property( @(posedge clk) (box_R10S[1][0] - rounded_box_R10S[1][0]) <= {subSample_RnnnnU,7'b0});
+    assert property( @(posedge clk) (box_R10S[1][1] - rounded_box_R10S[1][1]) <= {subSample_RnnnnU,7'b0});
+
+    // ***************** End of Step 2 *********************
+
+
+    // ********** Step 3:  Clipping or Rejection **********
+
+    // Clamp if LL is down/left of screen origin
+    // Clamp if UR is up/right of Screen
+    // Invalid if BBox is up/right of Screen
+    // Invalid if BBox is down/left of Screen
+    // outvalid_R10H high if validTri_R10H && BBox is valid
+    //logic halt_valid_control;
+    
+    always_comb begin
+
+        //////// ASSIGN "out_box_R10S" and "outvalid_R10H"
+        // START CODE HERE (use 24'b0???)
+        // assign out_box_R10S[1][0] = (rounded_box_R10S[1][0] < screen_RnnnnS[0]) ? rounded_box_R10S[1][0] : screen_RnnnnS[0];
+        // assign out_box_R10S[1][1] = (rounded_box_R10S[1][1] < screen_RnnnnS[1]) ? rounded_box_R10S[1][1] : screen_RnnnnS[1];
+        // assign out_box_R10S[0][0] = (rounded_box_R10S[0][0] > 1'b0) ? rounded_box_R10S[0][0] : 1'b0;
+        // assign out_box_R10S[0][1] = (rounded_box_R10S[0][1] > 1'b0) ? rounded_box_R10S[0][1] : 1'b0;
+        out_box_R10S[1][0] = (rounded_box_R10S[1][0] < screen_RnnnnS[0]) ? rounded_box_R10S[1][0] : screen_RnnnnS[0];
+        out_box_R10S[1][1] = (rounded_box_R10S[1][1] < screen_RnnnnS[1]) ? rounded_box_R10S[1][1] : screen_RnnnnS[1];
+        out_box_R10S[0][0] = (rounded_box_R10S[0][0] > 0) ? rounded_box_R10S[0][0] : 0;
+        out_box_R10S[0][1] = (rounded_box_R10S[0][1] > 0) ? rounded_box_R10S[0][1] : 0;
+
+        //Assertions to check BBox is not totally out of screen
+            // if (out_box_R10S[0][0] > screen_RnnnnS[0] && out_box_R10S[0][1] > screen_RnnnnS[1] && out_box_R10S[1][0] > screen_RnnnnS[0] && out_box_R10S[1][1] > screen_RnnnnS[1])
+            //     assign outvalid_R10H = 1'b0;
+            // else if (out_box_R10S[1][0] < 1'b0 && out_box_R10S[1][1] < 1'b0 && out_box_R10S[0][0] < 1'b0 && out_box_R10S[0][1] < 1'b0)
+            //     assign outvalid_R10H = 1'b0;
+            // else if (out_box_R10S[0][0] > screen_RnnnnS[0] && out_box_R10S[0][1] < 24'b0 && out_box_R10S[1][0] > screen_RnnnnS[0] && out_box_R10S[1][1] < 1'b0)
+            //     assign outvalid_R10H = 1'b0;
+            // else if (out_box_R10S[0][0] < 1'b0 && out_box_R10S[0][1] > screen_RnnnnS[1] && out_box_R10S[1][0] < 1'b0 && out_box_R10S[1][1] > screen_RnnnnS[1])
+            //     assign outvalid_R10H = 1'b0;
+            // else
+            //     assign outvalid_R10H = 1'b1;
+            // assign outvalid_R10H = validTri_R10H && outvalid_R10H;
+
+        if (out_box_R10S[0][0] >= 0 && out_box_R10S[0][1] >= 0 && out_box_R10S[1][0] < screen_RnnnnS[0] && out_box_R10S[1][1] < screen_RnnnnS[1][1])
+            outvalid_R10H = 1'b1;
+        else
+            outvalid_R10H = 1'b0;    
+        // END CODE HERE
+        
+    
+    end
+
+    //Assertion for checking if outvalid_R10H has been assigned properly
+    assert property( @(posedge clk) (outvalid_R10H |-> out_box_R10S[1][0] <= screen_RnnnnS[0] ));
+    assert property( @(posedge clk) (outvalid_R10H |-> out_box_R10S[1][1] <= screen_RnnnnS[1] ));
+    //assert property( @(posedge clk) !halt_RnnnnL |-> !outvalid_R10H);
+
+    // ***************** End of Step 3 *********************
+
+    dff3 #(
+        .WIDTH(SIGFIG),
+        .ARRAY_SIZE1(VERTS),
+        .ARRAY_SIZE2(AXIS),
+        .PIPE_DEPTH(PIPE_DEPTH - 1),
+        .RETIME_STATUS(1)
+    )
+    d_bbx_r1
+    (
+        .clk    (clk                ),
+        .reset  (rst                ),
+        .en     (halt_RnnnnL        ),
+        .in     (tri_R10S          ),
+        .out    (tri_R13S_retime   )
+    );
+
+    dff2 #(
+        .WIDTH(SIGFIG),
+        .ARRAY_SIZE(COLORS),
+        .PIPE_DEPTH(PIPE_DEPTH - 1),
+        .RETIME_STATUS(1)
+    )
+    d_bbx_r2
+    (
+        .clk    (clk                ),
+        .reset  (rst                ),
+        .en     (halt_RnnnnL        ),
+        .in     (color_R10U         ),
+        .out    (color_R13U_retime  )
+    );
+
+    dff3 #(
+        .WIDTH(SIGFIG),
+        .ARRAY_SIZE1(2),
+        .ARRAY_SIZE2(2),
+        .PIPE_DEPTH(PIPE_DEPTH - 1),
+        .RETIME_STATUS(1)
+    )
+    d_bbx_r3
+    (
+        .clk    (clk            ),
+        .reset  (rst            ),
+        .en     (halt_RnnnnL    ),
+        .in     (out_box_R10S   ),
+        .out    (box_R13S_retime)
+    );
+
+    dff_retime #(
+        .WIDTH(1),
+        .PIPE_DEPTH(PIPE_DEPTH - 1),
+        .RETIME_STATUS(1) // Retime
+    )
+    d_bbx_r4
+    (
+        .clk    (clk                    ),
+        .reset  (rst                    ),
+        .en     (halt_RnnnnL            ),
+        .in     (outvalid_R10H          ),
+        .out    (validTri_R13H_retime   )
+    );
+    //Flop Clamped Box to R13_retime with retiming registers
+
+    //Flop R13_retime to R13 with fixed registers
     dff3 #(
         .WIDTH(SIGFIG),
         .ARRAY_SIZE1(VERTS),
@@ -135,13 +471,13 @@ module test_iterator
         .PIPE_DEPTH(1),
         .RETIME_STATUS(0)
     )
-    d301
+    d_bbx_f1
     (
-        .clk    (clk            ),
-        .reset  (rst            ),
-        .en     (1'b1           ),
-        .in     (next_tri_R14S  ),
-        .out    (tri_R14S       )
+        .clk    (clk                ),
+        .reset  (rst                ),
+        .en     (halt_RnnnnL        ),
+        .in     (tri_R13S_retime    ),
+        .out    (tri_R13S           )
     );
 
     dff2 #(
@@ -150,65 +486,14 @@ module test_iterator
         .PIPE_DEPTH(1),
         .RETIME_STATUS(0)
     )
-    d302
-    (
-        .clk    (clk            ),
-        .reset  (rst            ),
-        .en     (1'b1           ),
-        .in     (next_color_R14U),
-        .out    (color_R14U     )
-    );
-
-    dff2 #(
-        .WIDTH(SIGFIG),
-        .ARRAY_SIZE(2),
-        .PIPE_DEPTH(1),
-        .RETIME_STATUS(0)
-    )
-    d303
+    d_bbx_f2
     (
         .clk    (clk                ),
         .reset  (rst                ),
-        .en     (1'b1               ),
-        .in     (next_sample_R14S   ),
-        .out    (sample_R14S        )
+        .en     (halt_RnnnnL        ),
+        .in     (color_R13U_retime  ),
+        .out    (color_R13U         )
     );
-
-    dff #(
-        .WIDTH(2),
-        .PIPE_DEPTH(1),
-        .RETIME_STATUS(0) // No retime
-    )
-    d304
-    (
-        .clk    (clk                                    ),
-        .reset  (rst                                    ),
-        .en     (1'b1                                   ),
-        .in     ({next_validSamp_R14H, next_halt_RnnnnL}),
-        .out    ({validSamp_R14H, halt_RnnnnL}          )
-    );
-    // Instantiate registers for storing these states
-
-    typedef enum logic {
-                            WAIT_STATE,
-                            TEST_STATE
-                        } state_t;
-generate
-if(MOD_FSM == 0) begin // Using baseline FSM
-    //////
-    //////  RTL code for original FSM Goes Here
-    //////
-
-    // To build this FSM we want to have two more state: one is the working
-    // status of this FSM, and the other is the current bounding box where
-    // we iterate sample points
-
-    // define two more states, box_R14S and state_R14H
-    logic signed [SIGFIG-1:0]   box_R14S[1:0][1:0];    		// the state for current bounding box
-    logic signed [SIGFIG-1:0]   next_box_R14S[1:0][1:0];
-
-    state_t                     state_R14H;     //State Designation (Waiting or Testing)
-    state_t                     next_state_R14H;        //Next Cycles State
 
     dff3 #(
         .WIDTH(SIGFIG),
@@ -217,209 +502,44 @@ if(MOD_FSM == 0) begin // Using baseline FSM
         .PIPE_DEPTH(1),
         .RETIME_STATUS(0)
     )
-    d305
+    d_bbx_f3
     (
         .clk    (clk            ),
         .reset  (rst            ),
-        .en     (1'b1           ),
-        .in     (next_box_R14S  ),
-        .out    (box_R14S       )
+        .en     (halt_RnnnnL    ),
+        .in     (box_R13S_retime),
+        .out    (box_R13S       )
     );
 
-    always_ff @(posedge clk, posedge rst) begin
-        if(rst) begin
-            state_R14H <= WAIT_STATE;
-        end
-        else begin
-            state_R14H <= next_state_R14H;
-        end
-    end
+    dff #(
+        .WIDTH(1),
+        .PIPE_DEPTH(1),
+        .RETIME_STATUS(0) // No retime
+    )
+    d_bbx_f4
+    (
+        .clk    (clk                    ),
+        .reset  (rst                    ),
+        .en     (halt_RnnnnL            ),
+        .in     (validTri_R13H_retime   ),
+        .out    (validTri_R13H          )
+    );
+    //Flop R13_retime to R13 with fixed registers
 
-    // define some helper signals
-    logic signed [SIGFIG-1:0]   next_up_samp_R14S[1:0]; //If jump up, next sample
-    logic signed [SIGFIG-1:0]   next_rt_samp_R14S[1:0]; //If jump right, next sample
-    logic                       at_right_edg_R14H;      //Current sample at right edge of bbox?
-    logic                       at_top_edg_R14H;        //Current sample at top edge of bbox?
-    logic                       at_end_box_R14H;        //Current sample at end of bbox?
-
-    //////
-    ////// First calculate the values of the helper signals using CURRENT STATES
-    //////
-
-    // check the comments 'A Note on Signal Names'
-    // at the begining of the module for the help on
-    // understanding the signals here
-
-    always_comb begin
-        // START CODE HERE
-        unique case(1'b1) //REVERSE CASE STATEMENT FOR ONE-HOT SIGNALS
-            subSample_RnnnnU[0]: begin //0001
-                // next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
-                // next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
-                next_rt_samp_R14S[1] = sample_R14S[1]; 
-                next_up_samp_R14S[0] = box_R14S[0][0];
-
-                next_rt_samp_R14S[0][SIGFIG-1:RADIX-3] = sample_R14S[0][SIGFIG-1:RADIX-3] + 1'b1;
-                next_rt_samp_R14S[0][RADIX-4:0] = sample_R14S[0][RADIX-4:0];
-                next_up_samp_R14S[1][SIGFIG-1:RADIX-3] = sample_R14S[1][SIGFIG-1:RADIX-3] + 1'b1;
-                next_up_samp_R14S[1][RADIX-4:0] = sample_R14S[1][RADIX-4:0];
-            end
-            subSample_RnnnnU[1]: begin //0010
-                next_rt_samp_R14S[1] = sample_R14S[1]; 
-                next_up_samp_R14S[0] = box_R14S[0][0];
-                // next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
-                // next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
-
-                next_rt_samp_R14S[0][SIGFIG-1:RADIX-2] = sample_R14S[0][SIGFIG-1:RADIX-2] + 1'b1;
-                next_rt_samp_R14S[0][RADIX-3:0] = sample_R14S[0][RADIX-3:0];
-                next_up_samp_R14S[1][SIGFIG-1:RADIX-2] = sample_R14S[1][SIGFIG-1:RADIX-2] + 1'b1;
-                next_up_samp_R14S[1][RADIX-3:0] = sample_R14S[1][RADIX-3:0];
-            end
-            subSample_RnnnnU[2]: begin //0100
-                next_rt_samp_R14S[1] = sample_R14S[1]; 
-                next_up_samp_R14S[0] = box_R14S[0][0];
-                next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
-                next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
-
-                next_rt_samp_R14S[0][SIGFIG-1:RADIX-1]= sample_R14S[0][SIGFIG-1:RADIX-1] + 1'b1;
-                next_rt_samp_R14S[0][RADIX-2:0] = sample_R14S[0][RADIX-2:0];
-                next_up_samp_R14S[1][SIGFIG-1:RADIX-1] = sample_R14S[1][SIGFIG-1:RADIX-1] + 1'b1;
-                next_up_samp_R14S[1][RADIX-2:0] = sample_R14S[1][RADIX-2:0];
-            end
-            subSample_RnnnnU[3]: begin //1000
-                next_rt_samp_R14S[1] = sample_R14S[1]; 
-                next_up_samp_R14S[0] = box_R14S[0][0];
-                next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
-                next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
-
-                next_rt_samp_R14S[0][SIGFIG-1:RADIX]= sample_R14S[0][SIGFIG-1:RADIX] + 1'b1;
-                next_rt_samp_R14S[0][RADIX-1:0] = sample_R14S[0][RADIX-1:0];
-                next_up_samp_R14S[1][SIGFIG-1:RADIX] = sample_R14S[1][SIGFIG-1:RADIX] + 1'b1;
-                next_up_samp_R14S[1][RADIX-1:0] = sample_R14S[1][RADIX-1:0];
-            end
-        endcase
-
-        if (sample_R14S[0] == box_R14S[1][0])
-            at_right_edg_R14H = 1'b1;
-        else at_right_edg_R14H = 1'b0;
-
-        if (sample_R14S[1] == box_R14S[1][1])
-            at_top_edg_R14H = 1'b1;
-        else at_top_edg_R14H = 1'b0;
-
-        if (sample_R14S == box_R14S[1])
-            at_end_box_R14H = 1'b1;
-        else at_end_box_R14H = 1'b0;
-
-        // END CODE HERE
-    end
-
-    //////
-    ////// Then complete the following combinational logic defining the
-    ////// next states
-    //////
-
-    ////// COMPLETE THE FOLLOW ALWAYS_COMB BLOCK
-
-    // Combinational logic for state transitions
-    always_comb begin
-        // START CODE HERE
-        // Try using a case statement on state_R14H
-        case(state_R14H)
-            WAIT_STATE : begin
-                next_box_R14S = box_R13S;
-                next_tri_R14S = tri_R13S;
-                next_color_R14U = color_R13U;
-                next_sample_R14S = box_R13S[0]; //ll bbox
-                next_validSamp_R14H = validTri_R13H;
-                next_halt_RnnnnL = validTri_R13H ? 1'b0 : 1'b1; 
-                next_state_R14H = validTri_R13H ? TEST_STATE : WAIT_STATE;
-            end
-            TEST_STATE : begin
-                next_box_R14S = box_R14S;
-                next_tri_R14S = tri_R14S; //iffy about this
-                next_color_R14U = color_R14U;
-
-                if (!at_right_edg_R14H && !at_top_edg_R14H) begin
-                    next_sample_R14S = next_rt_samp_R14S;
-                    next_validSamp_R14H = 1'b1;
-                    next_halt_RnnnnL = 1'b0;
-                    next_state_R14H = TEST_STATE;
-                end
-                else if (at_right_edg_R14H && !at_top_edg_R14H) begin
-                    next_sample_R14S = next_up_samp_R14S;
-                    next_validSamp_R14H = 1'b1;
-                    next_halt_RnnnnL = 1'b0;
-                    next_state_R14H = TEST_STATE;
-                end
-                else begin
-                    next_sample_R14S = box_R14S[0]; //ll bbox
-                    next_validSamp_R14H = 1'b0;
-                    next_halt_RnnnnL = 1'b1;
-                    next_state_R14H = WAIT_STATE;
-                end
-            end
-        endcase
-        // END CODE HERE
-    end // always_comb
-
-    //Assertions for testing FSM logic
-
-    // Write assertions to verify your FSM transition sequence
-    // Can you verify that:
-    // 1) A validTri_R13H signal causes a transition from WAIT state to TEST state
-    // 2) An end_box_R14H signal causes a transition from TEST state to WAIT state
-    // 3) What are you missing?
-
-    //Your assertions goes here
-    // START CODE HERE
-    assert property (@(posedge clk) validTri_R13H && state_R14H==WAIT_STATE |-> next_state_R14H==TEST_STATE);
-    assert property (@(posedge clk) at_top_edg_R14H && state_R14H==TEST_STATE |-> next_state_R14H==WAIT_STATE);
-    //ssert property (@(posedge clk) next_halt_RnnnnL && state_R14H==TEST_STATE |-> next_state_R14H==WAIT_STATE);
-    //assert property (@(posedge clk) next_halt_RnnnnL && state_R14H==WAIT_STATE |=> state_R14H==WAIT_STATE);
-    // END CODE HERE
-    // Assertion ends
-
-    //////
-    //////  RTL code for original FSM Finishes
-    //////
-
-    //Some Error Checking Assertions
+    //Error Checking Assertions
 
     //Define a Less Than Property
     //
     //  a should be less than b
-    property rb_lt( rst, a , b , c );
+    property rb_lt( rst, a, b, c );
         @(posedge clk) rst | ((a<=b) | !c);
     endproperty
 
-    //Check that Proposed Sample is in BBox
-    // START CODE HERE
-    assert property (rb_lt(rst, next_sample_R14S[0], next_box_R14S[1][0], next_validSamp_R14H)); //ns_x <= nb_ur_x
-    assert property (rb_lt(rst, next_sample_R14S[1], next_box_R14S[1][1], next_validSamp_R14H)); //ns_y <= nb_ur_y
-    assert property (rb_lt(rst, next_box_R14S[0][0], next_sample_R14S[0], validTri_R13H)); //nb_ll_x <= ns_x
-    assert property (rb_lt(rst, next_box_R14S[0][1], next_sample_R14S[1], validTri_R13H)); //nb_ur_y <= ns_y
-    // END CODE HERE
-    //Check that Proposed Sample is in BBox
-    
+    //Check that Lower Left of Bounding Box is less than equal Upper Right
+    assert property( rb_lt( rst, box_R13S[0][0], box_R13S[1][0], validTri_R13H ));
+    assert property( rb_lt( rst, box_R13S[0][1], box_R13S[1][1], validTri_R13H ));
+    //Check that Lower Left of Bounding Box is less than equal Upper Right
+
     //Error Checking Assertions
-end 
-else begin // Use modified FSM
-
-    //////
-    //////  RTL code for modified FSM Goes Here
-    //////
-
-    ////// PLACE YOUR CODE HERE
-
-    //////
-    //////  RTL code for modified FSM Finishes
-    //////
-
-end
-endgenerate
 
 endmodule
-
-
-
