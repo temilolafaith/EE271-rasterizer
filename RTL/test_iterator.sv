@@ -293,15 +293,15 @@ if(MOD_FSM == 0) begin // Using baseline FSM
 
         if (sample_R14S[0] == box_R14S[1][0])
             at_right_edg_R14H = 1'b1;
-        else at_right_edg_R14_H = 1'b0;
+        else at_right_edg_R14H = 1'b0;
 
         if (sample_R14S[1] == box_R14S[1][1])
             at_top_edg_R14H = 1'b1;
-        else at_top_edg_R14_H = 1'b0;
+        else at_top_edg_R14H = 1'b0;
 
         if (sample_R14S == box_R14S[1])
             at_end_box_R14H = 1'b1;
-        else at_end_box_R14_H = 1'b0;
+        else at_end_box_R14H = 1'b0;
 
         // END CODE HERE
     end
@@ -312,11 +312,7 @@ if(MOD_FSM == 0) begin // Using baseline FSM
     //////
 
     ////// COMPLETE THE FOLLOW ALWAYS_COMB BLOCK
-next_tri_R14S[VERTS-1:0][AXIS-1:0];
-    logic unsigned  [SIGFIG-1:0]    next_color_R14U[COLORS-1:0] ;
-    logic signed [SIGFIG-1:0]       next_sample_R14S[1:0];
-    logic                               next_validSamp_R14H;
-    logic                               next_halt_RnnnnL;
+
     // Combinational logic for state transitions
     always_comb begin
         // START CODE HERE
@@ -372,6 +368,7 @@ next_tri_R14S[VERTS-1:0][AXIS-1:0];
     assert property (@(posedge clk) validTri_R13H && state_R14H==WAIT_STATE |-> next_state_R14H==TEST_STATE);
     assert property (@(posedge clk) at_top_edg_R14H && state_R14H==TEST_STATE |-> next_state_R14H==WAIT_STATE);
     assert property (@(posedge clk) next_halt_RnnnnL && state_R14H==TEST_STATE |-> next_state_R14H==WAIT_STATE);
+    assert property (@(posedge clk) !next_halt_RnnnnL && state_R14H==WAIT_STATE |=> state_R14H==WAIT_STATE);
     // END CODE HERE
     // Assertion ends
 
@@ -390,10 +387,10 @@ next_tri_R14S[VERTS-1:0][AXIS-1:0];
 
     //Check that Proposed Sample is in BBox
     // START CODE HERE
-    assert property (rb_lt(rst, next_sample_R14S[0], next_box_R14S[1][0], next_validSamp_R14H)); \\ns_x <= nb_ur_x
-    assert property (rb_lt(rst, next_sample_R14S[1], next_box_R14S[1][1], next_validSamp_R14H)); \\ns_y <= nb_ur_y
-    assert property (rb_lt(rst, next_box_R14S[0][0], next_sample_R14S[0], next_validSamp_R14H)); \\nb_ll_x <= ns_x
-    assert property (rb_lt(rst, next_box_R14S[0][1], next_sample_R14S[1], next_validSamp_R14H)); \\nb_ur_y <= ns_y
+    assert property (rb_lt(rst, next_sample_R14S[0], next_box_R14S[1][0], next_validSamp_R14H)); //ns_x <= nb_ur_x
+    assert property (rb_lt(rst, next_sample_R14S[1], next_box_R14S[1][1], next_validSamp_R14H)); //ns_y <= nb_ur_y
+    assert property (rb_lt(rst, next_box_R14S[0][0], next_sample_R14S[0], next_validSamp_R14H)); //nb_ll_x <= ns_x
+    assert property (rb_lt(rst, next_box_R14S[0][1], next_sample_R14S[1], next_validSamp_R14H)); //nb_ur_y <= ns_y
     // END CODE HERE
     //Check that Proposed Sample is in BBox
     
