@@ -140,6 +140,7 @@ module bbox
     output logic                            validTri_R13H                  // Valid Data for Operation
 );
 
+
     //Signals In Clocking Order
 
     //Begin R10 Signals
@@ -174,6 +175,7 @@ module bbox
 
     // This select signal structure may help you in selecting your bbox coordinates
     logic [2:0] bbox_sel_R10H [1:0][1:0];
+ 
     // The above structure consists of a 3-bit select signal for each coordinate of the 
     // bouding box. The leftmost [1:0] dimensions refer to LL/UR, while the rightmost 
     // [1:0] dimensions refer to X or Y coordinates. Each select signal should be a 3-bit 
@@ -187,89 +189,170 @@ module bbox
     // Try declaring an always_comb block to assign values to box_R10S
     always_comb begin
         if ((tri_R10S[0][0] < tri_R10S[1][0]) && (tri_R10S[1][0] < tri_R10S[2][0])) begin
+            // bbox_sel_R10H[0][0][0] = 1'b1;            
+            // bbox_sel_R10H[0][0][1] = 1'b0;
+            // bbox_sel_R10H[0][0][2] = 1'b0;
+            // bbox_sel_R10H[1][0][0] = 1'b0;            
+            // bbox_sel_R10H[1][0][1] = 1'b0;
+            // bbox_sel_R10H[1][0][2] = 1'b1;
+
             bbox_sel_R10H[0][0] = 3'b001;
             bbox_sel_R10H[1][0] = 3'b100;
         end
         else if ((tri_R10S[1][0] < tri_R10S[0][0]) && (tri_R10S[0][0] < tri_R10S[2][0])) begin
+            // bbox_sel_R10H[0][0][0] = 1'b0;            
+            // bbox_sel_R10H[0][0][1] = 1'b1;
+            // bbox_sel_R10H[0][0][2] = 1'b0;
+            // bbox_sel_R10H[1][0][0] = 1'b0;            
+            // bbox_sel_R10H[1][0][1] = 1'b0;
+            // bbox_sel_R10H[1][0][2] = 1'b1;
+
             bbox_sel_R10H[0][0] = 3'b010;
             bbox_sel_R10H[1][0] = 3'b100;
         end
         else if ((tri_R10S[0][0] < tri_R10S[2][0]) && (tri_R10S[2][0] < tri_R10S[1][0])) begin
+            // bbox_sel_R10H[0][0][0] = 1'b1;            
+            // bbox_sel_R10H[0][0][1] = 1'b0;
+            // bbox_sel_R10H[0][0][2] = 1'b0;
+            // bbox_sel_R10H[1][0][0] = 1'b0;            
+            // bbox_sel_R10H[1][0][1] = 1'b1;
+            // bbox_sel_R10H[1][0][2] = 1'b0;
+
             bbox_sel_R10H[0][0] = 3'b001;
             bbox_sel_R10H[1][0] = 3'b010;
         end
         else if ((tri_R10S[1][0] < tri_R10S[2][0]) && (tri_R10S[2][0] < tri_R10S[0][0])) begin
+            // bbox_sel_R10H[0][0][0] = 1'b1;            
+            // bbox_sel_R10H[0][0][1] = 1'b0;
+            // bbox_sel_R10H[0][0][2] = 1'b0;
+            // bbox_sel_R10H[1][0][0] = 1'b0;            
+            // bbox_sel_R10H[1][0][1] = 1'b0;
+            // bbox_sel_R10H[1][0][2] = 1'b1;
+
             bbox_sel_R10H[0][0] = 3'b010;
             bbox_sel_R10H[1][0] = 3'b001;
         end
         else if ((tri_R10S[2][0] < tri_R10S[0][0]) && (tri_R10S[0][0] < tri_R10S[1][0])) begin
+            // bbox_sel_R10H[0][0][0] = 1'b0;            
+            // bbox_sel_R10H[0][0][1] = 1'b0;
+            // bbox_sel_R10H[0][0][2] = 1'b1;
+            // bbox_sel_R10H[1][0][0] = 1'b0;            
+            // bbox_sel_R10H[1][0][1] = 1'b1;
+            // bbox_sel_R10H[1][0][2] = 1'b0;
+
             bbox_sel_R10H[0][0] = 3'b100;
             bbox_sel_R10H[1][0] = 3'b010;
         end
-        else if ((tri_R10S[2][0] < tri_R10S[1][0]) && (tri_R10S[1][0] < tri_R10S[0][0])) begin
+        //else if ((tri_R10S[2][0] < tri_R10S[1][0]) && (tri_R10S[1][0] < tri_R10S[0][0])) begin
+        else begin
+            // bbox_sel_R10H[0][0][0] = 1'b0;            
+            // bbox_sel_R10H[0][0][1] = 1'b0;
+            // bbox_sel_R10H[0][0][2] = 1'b1;
+            // bbox_sel_R10H[1][0][0] = 1'b1;            
+            // bbox_sel_R10H[1][0][1] = 1'b0;
+            // bbox_sel_R10H[1][0][2] = 1'b0;
+            
             bbox_sel_R10H[0][0] = 3'b100;
             bbox_sel_R10H[1][0] = 3'b001;
         end
-        else begin // weird situation, should be marked as invalid
-            bbox_sel_R10H[0][0] = 3'b001;
-            bbox_sel_R10H[1][0] = 3'b001;
-        end
+        // else begin // weird situation, should be marked as invalid
+        //     bbox_sel_R10H[0][0] = 3'b001;
+        //     bbox_sel_R10H[1][0] = 3'b001;
+        
+       if ((tri_R10S[0][1] < tri_R10S[1][1]) && (tri_R10S[1][1] < tri_R10S[2][1])) begin
+            // bbox_sel_R10H[0][1][0] = 1'b1;            
+            // bbox_sel_R10H[0][1][1] = 1'b0;
+            // bbox_sel_R10H[0][1][2] = 1'b0;
+            // bbox_sel_R10H[1][1][0] = 1'b0;            
+            // bbox_sel_R10H[1][1][1] = 1'b0;
+            // bbox_sel_R10H[1][1][2] = 1'b1;
 
-        if ((tri_R10S[0][1] < tri_R10S[1][1]) && (tri_R10S[1][1] < tri_R10S[2][1])) begin
             bbox_sel_R10H[0][1] = 3'b001;
             bbox_sel_R10H[1][1] = 3'b100;
         end
         else if ((tri_R10S[1][1] < tri_R10S[0][1]) && (tri_R10S[0][1] < tri_R10S[2][1])) begin
+            // bbox_sel_R10H[0][1][0] = 1'b0;            
+            // bbox_sel_R10H[0][1][1] = 1'b1;
+            // bbox_sel_R10H[0][1][2] = 1'b0;
+            // bbox_sel_R10H[1][1][0] = 1'b0;            
+            // bbox_sel_R10H[1][1][1] = 1'b0;
+            // bbox_sel_R10H[1][1][2] = 1'b1;
+
             bbox_sel_R10H[0][1] = 3'b010;
             bbox_sel_R10H[1][1] = 3'b100;
         end
         else if ((tri_R10S[0][1] < tri_R10S[2][1]) && (tri_R10S[2][1] < tri_R10S[1][1])) begin
+            // bbox_sel_R10H[0][1][0] = 1'b1;            
+            // bbox_sel_R10H[0][1][1] = 1'b0;
+            // bbox_sel_R10H[0][1][2] = 1'b0;
+            // bbox_sel_R10H[1][1][0] = 1'b0;            
+            // bbox_sel_R10H[1][1][1] = 1'b1;
+            // bbox_sel_R10H[1][1][2] = 1'b0;
+
             bbox_sel_R10H[0][1] = 3'b001;
             bbox_sel_R10H[1][1] = 3'b010;
         end
         else if ((tri_R10S[1][1] < tri_R10S[2][1]) && (tri_R10S[2][1] < tri_R10S[0][1])) begin
+            // bbox_sel_R10H[0][1][0] = 1'b1;            
+            // bbox_sel_R10H[0][1][1] = 1'b0;
+            // bbox_sel_R10H[0][1][2] = 1'b0;
+            // bbox_sel_R10H[1][1][0] = 1'b0;            
+            // bbox_sel_R10H[1][1][1] = 1'b0;
+            // bbox_sel_R10H[1][1][2] = 1'b1;
+
             bbox_sel_R10H[0][1] = 3'b010;
             bbox_sel_R10H[1][1] = 3'b001;
         end
         else if ((tri_R10S[2][1] < tri_R10S[0][1]) && (tri_R10S[0][1] < tri_R10S[1][1])) begin
+            // bbox_sel_R10H[0][1][0] = 1'b0;            
+            // bbox_sel_R10H[0][1][1] = 1'b0;
+            // bbox_sel_R10H[0][1][2] = 1'b1;
+            // bbox_sel_R10H[1][1][0] = 1'b0;            
+            // bbox_sel_R10H[1][1][1] = 1'b1;
+            // bbox_sel_R10H[1][1][2] = 1'b0;
+
             bbox_sel_R10H[0][1] = 3'b100;
             bbox_sel_R10H[1][1] = 3'b010;
         end
-        else if ((tri_R10S[2][1] < tri_R10S[1][1]) && (tri_R10S[1][1] < tri_R10S[0][1])) begin
+        //else if ((tri_R10S[2][0] < tri_R10S[1][0]) && (tri_R10S[1][0] < tri_R10S[0][0])) begin
+        else begin
+            // bbox_sel_R10H[0][1][0] = 1'b0;            
+            // bbox_sel_R10H[0][1][1] = 1'b0;
+            // bbox_sel_R10H[0][1][2] = 1'b1;
+            // bbox_sel_R10H[1][1][0] = 1'b1;            
+            // bbox_sel_R10H[1][1][1] = 1'b0;
+            // bbox_sel_R10H[1][1][2] = 1'b0;
+            
             bbox_sel_R10H[0][1] = 3'b100;
             bbox_sel_R10H[1][1] = 3'b001;
         end
-        else begin // weird situation, should be marked as invalid
-            bbox_sel_R10H[0][1] = 3'b001;
-            bbox_sel_R10H[1][1] = 3'b001;
-        end
 
-        case(bbox_sel_R10H[0][0])
-            3'b001: box_R10S[0][0] = tri_R10S[0][0];
-            3'b010: box_R10S[0][0] = tri_R10S[1][0];
-            3'b100: box_R10S[0][0] = tri_R10S[2][0];
-            default: box_R10S[0][0] = tri_R10S[0][0];
+        unique case(1'b1)
+            bbox_sel_R10H[0][0][0]: box_R10S[0][0] = tri_R10S[0][0];
+            bbox_sel_R10H[0][0][1]: box_R10S[0][0] = tri_R10S[1][0];
+            bbox_sel_R10H[0][0][2]: box_R10S[0][0] = tri_R10S[2][0];
+            //default: box_R10S[0][0] = 24'b0;
         endcase
 
-        case(bbox_sel_R10H[0][1])
-            3'b001: box_R10S[0][1] = tri_R10S[0][1];
-            3'b010: box_R10S[0][1] = tri_R10S[1][1];
-            3'b100: box_R10S[0][1] = tri_R10S[2][1];
-            default: box_R10S[0][1] = tri_R10S[0][1];
+        unique case(1'b1)
+            bbox_sel_R10H[0][1][0]: box_R10S[0][1] = tri_R10S[0][1];
+            bbox_sel_R10H[0][1][1]: box_R10S[0][1] = tri_R10S[1][1];
+            bbox_sel_R10H[0][1][2]: box_R10S[0][1] = tri_R10S[2][1];
+            //default: box_R10S[0][1] = 24'b0;
         endcase
 
-        case(bbox_sel_R10H[1][0])
-            3'b001: box_R10S[1][0] = tri_R10S[0][0];
-            3'b010: box_R10S[1][0] = tri_R10S[1][0];
-            3'b100: box_R10S[1][0] = tri_R10S[2][0];
-            default: box_R10S[1][0] = tri_R10S[0][0];
+        unique case(1'b1)
+            bbox_sel_R10H[1][0][0]: box_R10S[1][0] = tri_R10S[0][0];
+            bbox_sel_R10H[1][0][1]: box_R10S[1][0] = tri_R10S[1][0];
+            bbox_sel_R10H[1][0][2]: box_R10S[1][0] = tri_R10S[2][0];
+            //default: box_R10S[1][0] = 24'b0;
         endcase
 
-        case(bbox_sel_R10H[1][1])
-            3'b001: box_R10S[1][1] = tri_R10S[0][1];
-            3'b010: box_R10S[1][1] = tri_R10S[1][1];
-            3'b100: box_R10S[1][1] = tri_R10S[2][1];
-            default: box_R10S[1][1] = tri_R10S[0][1];
+        unique case(1'b1)
+            bbox_sel_R10H[1][1][0]: box_R10S[1][1] = tri_R10S[0][1];
+            bbox_sel_R10H[1][1][1]: box_R10S[1][1] = tri_R10S[1][1];
+            bbox_sel_R10H[1][1][2]: box_R10S[1][1] = tri_R10S[2][1];
+            //default: box_R10S[1][1] = 24'b0;
         endcase
     end
 
@@ -288,10 +371,17 @@ module bbox
     assert property(@(posedge clk) $onehot(bbox_sel_R10H[1][0]));
     assert property(@(posedge clk) $onehot(bbox_sel_R10H[1][1]));
 
-    //Assertions to check UR is never less than LL (assign validTri_R10H???)
+    //Assertions to check UR is never less than LL and that box is valid (assign validTri_R10H???)
     // START CODE HERE
     assert property (@(posedge clk) box_R10S[0][0] <= box_R10S[1][0]);
     assert property (@(posedge clk) box_R10S[0][1] <= box_R10S[1][1]);
+
+    assert property (@(posedge clk) box_R10S[0][0] >= 0);
+    assert property (@(posedge clk) box_R10S[0][1] >= 0);
+    assert property (@(posedge clk) box_R10S[1][0] <= screen_RnnnnS[0]);
+    assert property (@(posedge clk) box_R10S[1][1] <= screen_RnnnnS[1]);
+
+
 
     // END CODE HERE
 
@@ -358,6 +448,10 @@ endgenerate
     // Invalid if BBox is down/left of Screen
     // outvalid_R10H high if validTri_R10H && BBox is valid
     //logic halt_valid_control;
+    assert property (@(posedge clk) rounded_box_R10S[0][0] >= 0);
+    assert property (@(posedge clk) rounded_box_R10S[0][1] >= 0);
+    assert property (@(posedge clk) rounded_box_R10S[1][0] <= screen_RnnnnS[0]);
+    assert property (@(posedge clk) rounded_box_R10S[1][1] <= screen_RnnnnS[1]);
     
     always_comb begin
 
@@ -367,10 +461,13 @@ endgenerate
         // assign out_box_R10S[1][1] = (rounded_box_R10S[1][1] < screen_RnnnnS[1]) ? rounded_box_R10S[1][1] : screen_RnnnnS[1];
         // assign out_box_R10S[0][0] = (rounded_box_R10S[0][0] > 1'b0) ? rounded_box_R10S[0][0] : 1'b0;
         // assign out_box_R10S[0][1] = (rounded_box_R10S[0][1] > 1'b0) ? rounded_box_R10S[0][1] : 1'b0;
-        out_box_R10S[1][0] = (rounded_box_R10S[1][0] < screen_RnnnnS[0]) ? rounded_box_R10S[1][0] : screen_RnnnnS[0];
-        out_box_R10S[1][1] = (rounded_box_R10S[1][1] < screen_RnnnnS[1]) ? rounded_box_R10S[1][1] : screen_RnnnnS[1];
-        out_box_R10S[0][0] = (rounded_box_R10S[0][0] > 0) ? rounded_box_R10S[0][0] : 0;
-        out_box_R10S[0][1] = (rounded_box_R10S[0][1] > 0) ? rounded_box_R10S[0][1] : 0;
+        if (!halt_RnnnnL) begin
+        
+            out_box_R10S[0][0] = (rounded_box_R10S[0][0] >= 0) ? rounded_box_R10S[0][0] : 0;
+            out_box_R10S[0][1] = (rounded_box_R10S[0][1] >= 0) ? rounded_box_R10S[0][1] : 0;
+
+            out_box_R10S[1][0] = (rounded_box_R10S[1][0] <= screen_RnnnnS[0]) ? rounded_box_R10S[1][0] : screen_RnnnnS[0];
+            out_box_R10S[1][1] = (rounded_box_R10S[1][1] <= screen_RnnnnS[1]) ? rounded_box_R10S[1][1] : screen_RnnnnS[1];
 
         //Assertions to check BBox is not totally out of screen
             // if (out_box_R10S[0][0] > screen_RnnnnS[0] && out_box_R10S[0][1] > screen_RnnnnS[1] && out_box_R10S[1][0] > screen_RnnnnS[0] && out_box_R10S[1][1] > screen_RnnnnS[1])
@@ -385,18 +482,18 @@ endgenerate
             //     assign outvalid_R10H = 1'b1;
             // assign outvalid_R10H = validTri_R10H && outvalid_R10H;
 
-        if (out_box_R10S[0][0] >= 0 && out_box_R10S[0][1] >= 0 && out_box_R10S[1][0] < screen_RnnnnS[0] && out_box_R10S[1][1] < screen_RnnnnS[1][1])
+        if ((out_box_R10S[0][0] >= 0) && (out_box_R10S[0][1] >= 0) && (out_box_R10S[1][0] <= screen_RnnnnS[0]) && (out_box_R10S[1][1] <= screen_RnnnnS[1]))
             outvalid_R10H = 1'b1;
         else
             outvalid_R10H = 1'b0;    
         // END CODE HERE
-        
+        end
     
     end
 
     //Assertion for checking if outvalid_R10H has been assigned properly
-    assert property( @(posedge clk) (outvalid_R10H |-> out_box_R10S[1][0] <= screen_RnnnnS[0] ));
-    assert property( @(posedge clk) (outvalid_R10H |-> out_box_R10S[1][1] <= screen_RnnnnS[1] ));
+    assert property( @(posedge clk) (outvalid_R10H |-> (out_box_R10S[1][0] <= screen_RnnnnS[0] )));
+    assert property( @(posedge clk) (outvalid_R10H |-> (out_box_R10S[1][1] <= screen_RnnnnS[1] )));
     //assert property( @(posedge clk) !halt_RnnnnL |-> !outvalid_R10H);
 
     // ***************** End of Step 3 *********************
@@ -536,8 +633,8 @@ endgenerate
     endproperty
 
     //Check that Lower Left of Bounding Box is less than equal Upper Right
-    assert property( rb_lt( rst, box_R13S[0][0], box_R13S[1][0], validTri_R13H ));
-    assert property( rb_lt( rst, box_R13S[0][1], box_R13S[1][1], validTri_R13H ));
+    assert property( rb_lt( rst, box_R13S[0][0], box_R13S[1][0], !validTri_R13H ));
+    assert property( rb_lt( rst, box_R13S[0][1], box_R13S[1][1], !validTri_R13H ));
     //Check that Lower Left of Bounding Box is less than equal Upper Right
 
     //Error Checking Assertions
