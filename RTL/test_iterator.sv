@@ -204,7 +204,7 @@ if(MOD_FSM == 0) begin // Using baseline FSM
     // we iterate sample points
 
     // define two more states, box_R14S and state_R14H
-    logic signed [SIGFIG-1:0]   box_R14S[1:0][1:0];    		// the state for current bounding box
+    logic signed [SIGFIG-1:0]   box_R14S[1:0][1:0];         // the state for current bounding box
     logic signed [SIGFIG-1:0]   next_box_R14S[1:0][1:0];
 
     state_t                     state_R14H;     //State Designation (Waiting or Testing)
@@ -242,6 +242,8 @@ if(MOD_FSM == 0) begin // Using baseline FSM
     logic                       at_top_edg_R14H;        //Current sample at top edge of bbox?
     logic                       at_end_box_R14H;        //Current sample at end of bbox?
 
+    logic                       is_back_face_R14H; // Current triangle back face?
+
     //////
     ////// First calculate the values of the helper signals using CURRENT STATES
     //////
@@ -249,67 +251,91 @@ if(MOD_FSM == 0) begin // Using baseline FSM
     // check the comments 'A Note on Signal Names'
     // at the begining of the module for the help on
     // understanding the signals here
+/*
+    logic signed [SIGFIG-1:0] x0;
+    logic signed [SIGFIG-1:0] x1;
+    logic signed [SIGFIG-12:0] x0_1;
+    logic signed [SIGFIG-12:0] x1_1;
+
+    logic signed [SIGFIG-1:0] y0;
+    logic signed [SIGFIG-1:0] y1;
+    logic signed [SIGFIG-12:0] y0_1;
+    logic signed [SIGFIG-12:0] y1_1;
+
+    // check if triangle is backfacing
+    always_comb begin
+        x0 = tri_R13S[1][0] - tri_R13S[0][0];
+        x1 = tri_R13S[2][0] - tri_R13S[1][0];
+        x0_1 = x0[12:0];
+        x1_1 = x1[12:0];
+
+        y0 = tri_R13S[2][1] - tri_R13S[1][1];
+        y1 = tri_R13S[1][1] - tri_R13S[0][1];
+        y0_1 = y0[12:0];
+        y1_1 = y1[12:0];
+
+        //$display("tri_R13S[1][0] - tri_R13S[0][0] %b", x0);
+        //$display("tri_R13S[1][0] - tri_R13S[0][0] %b", tri_R13S[1][0][22:0] - tri_R13S[0][0][22:0]);
+        //$display("tri_R13S[2][1] - tri_R13S[1][1] %b", y0);
+        //$display("tri_R13S[2][1] - tri_R13S[1][1] %b", tri_R13S[2][1][22:0] - tri_R13S[1][1][22:0]);
+        //$display("x0 * y0 %b", x0*y0);
+        //$display("x0 * y0 %b", x0[22:0]*y0[22:0]);
+
+        if ((x0_1)*(y0_1) - (x1_1)*(y1_1) > 0) is_back_face_R14H = 1'b1;
+        else is_back_face_R14H = 1'b0;
+    end
+*/
 
     always_comb begin
         // START CODE HERE
-        unique case(1'b1) //REVERSE CASE STATEMENT FOR ONE-HOT SIGNALS
-            subSample_RnnnnU[0]: begin //0001
-                // next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
-                // next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
-                next_rt_samp_R14S[1] = sample_R14S[1]; 
+        unique case (subSample_RnnnnU)
+            4'b1000 : begin
                 next_up_samp_R14S[0] = box_R14S[0][0];
+                next_up_samp_R14S[1][SIGFIG-1:RADIX] = sample_R14S[1][SIGFIG-1:RADIX] + 1'b1;
+                next_up_samp_R14S[1][RADIX-1:0] = sample_R14S[1][RADIX-1:0];
 
-                next_rt_samp_R14S[0][SIGFIG-1:RADIX-3] = sample_R14S[0][SIGFIG-1:RADIX-3] + 1'b1;
-                next_rt_samp_R14S[0][RADIX-4:0] = sample_R14S[0][RADIX-4:0];
-                next_up_samp_R14S[1][SIGFIG-1:RADIX-3] = sample_R14S[1][SIGFIG-1:RADIX-3] + 1'b1;
-                next_up_samp_R14S[1][RADIX-4:0] = sample_R14S[1][RADIX-4:0];
+                next_rt_samp_R14S[0][SIGFIG-1:RADIX] = sample_R14S[0][SIGFIG-1:RADIX] + 1'b1;
+                next_rt_samp_R14S[0][RADIX-1:0] = sample_R14S[0][RADIX-1:0];
+                next_rt_samp_R14S[1] = sample_R14S[1];
             end
-            subSample_RnnnnU[1]: begin //0010
-                next_rt_samp_R14S[1] = sample_R14S[1]; 
+           4'b0100 : begin
                 next_up_samp_R14S[0] = box_R14S[0][0];
-                // next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
-                // next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
+                next_up_samp_R14S[1][SIGFIG-1:RADIX-1] = sample_R14S[1][SIGFIG-1:RADIX-1] + 1'b1;
+                next_up_samp_R14S[1][RADIX-2:0] = sample_R14S[1][RADIX-2:0];
+
+                next_rt_samp_R14S[0][SIGFIG-1:RADIX-1] = sample_R14S[0][SIGFIG-1:RADIX-1] + 1'b1;
+                next_rt_samp_R14S[0][RADIX-2:0] = sample_R14S[0][RADIX-2:0];
+                next_rt_samp_R14S[1] = sample_R14S[1];
+            end
+            4'b0010 : begin
+                next_up_samp_R14S[0] = box_R14S[0][0];
+                next_up_samp_R14S[1][SIGFIG-1:RADIX-2] = sample_R14S[1][SIGFIG-1:RADIX-2] + 1'b1;
+                next_up_samp_R14S[1][RADIX-3:0] = sample_R14S[1][RADIX-3:0];
 
                 next_rt_samp_R14S[0][SIGFIG-1:RADIX-2] = sample_R14S[0][SIGFIG-1:RADIX-2] + 1'b1;
                 next_rt_samp_R14S[0][RADIX-3:0] = sample_R14S[0][RADIX-3:0];
-                next_up_samp_R14S[1][SIGFIG-1:RADIX-2] = sample_R14S[1][SIGFIG-1:RADIX-2] + 1'b1;
-                next_up_samp_R14S[1][RADIX-3:0] = sample_R14S[1][RADIX-3:0];
+                next_rt_samp_R14S[1] = sample_R14S[1];
             end
-            subSample_RnnnnU[2]: begin //0100
-                next_rt_samp_R14S[1] = sample_R14S[1]; 
+            4'b0001 : begin
                 next_up_samp_R14S[0] = box_R14S[0][0];
-                // next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
-                // next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
+                next_up_samp_R14S[1][SIGFIG-1:RADIX-3] = sample_R14S[1][SIGFIG-1:RADIX-3] + 1'b1;
+                next_up_samp_R14S[1][RADIX-4:0] = sample_R14S[1][RADIX-4:0];
 
-                next_rt_samp_R14S[0][SIGFIG-1:RADIX-1]= sample_R14S[0][SIGFIG-1:RADIX-1] + 1'b1;
-                next_rt_samp_R14S[0][RADIX-2:0] = sample_R14S[0][RADIX-2:0];
-                next_up_samp_R14S[1][SIGFIG-1:RADIX-1] = sample_R14S[1][SIGFIG-1:RADIX-1] + 1'b1;
-                next_up_samp_R14S[1][RADIX-2:0] = sample_R14S[1][RADIX-2:0];
-            end
-            subSample_RnnnnU[3]: begin //1000
-                next_rt_samp_R14S[1] = sample_R14S[1]; 
-                next_up_samp_R14S[0] = box_R14S[0][0];
-                // next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
-                // next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
 
-                next_rt_samp_R14S[0][SIGFIG-1:RADIX]= sample_R14S[0][SIGFIG-1:RADIX] + 1'b1;
-                next_rt_samp_R14S[0][RADIX-1:0] = sample_R14S[0][RADIX-1:0];
-                next_up_samp_R14S[1][SIGFIG-1:RADIX] = sample_R14S[1][SIGFIG-1:RADIX] + 1'b1;
-                next_up_samp_R14S[1][RADIX-1:0] = sample_R14S[1][RADIX-1:0];
+                next_rt_samp_R14S[0][SIGFIG-1:RADIX-3] = sample_R14S[0][SIGFIG-1:RADIX-3] + 1'b1;
+                next_rt_samp_R14S[0][RADIX-4:0] = sample_R14S[0][RADIX-4:0];
+                next_rt_samp_R14S[1] = sample_R14S[1];
             end
         endcase
-
-        if (sample_R14S[0] == box_R14S[1][0])
-            at_right_edg_R14H = 1'b1;
+        if (sample_R14S[0] == box_R14S[1][0]) at_right_edg_R14H = 1'b1;
         else at_right_edg_R14H = 1'b0;
 
-        if (sample_R14S[1] == box_R14S[1][1])
-            at_top_edg_R14H = 1'b1;
+        if (sample_R14S[1] == box_R14S[1][1]) at_top_edg_R14H = 1'b1;
         else at_top_edg_R14H = 1'b0;
 
-        if (sample_R14S == box_R14S[1])
-            at_end_box_R14H = 1'b1;
+        if (sample_R14S == box_R14S[1]) at_end_box_R14H = 1'b1;
         else at_end_box_R14H = 1'b0;
+
 
         // END CODE HERE
     end
@@ -325,35 +351,38 @@ if(MOD_FSM == 0) begin // Using baseline FSM
     always_comb begin
         // START CODE HERE
         // Try using a case statement on state_R14H
-        case(state_R14H)
+        //$display(state_R14H);
+        case (state_R14H)
             WAIT_STATE : begin
-                next_box_R14S = box_R13S;
-                next_tri_R14S = tri_R13S;
-                next_color_R14U = color_R13U;
-                next_sample_R14S = box_R13S[0]; //ll bbox
-                next_validSamp_R14H = validTri_R13H;
-                next_halt_RnnnnL = validTri_R13H ? 1'b0 : 1'b1; 
-                next_state_R14H = validTri_R13H ? TEST_STATE : WAIT_STATE;
+                // In waiting state until valid bbox appears at input
+                    next_tri_R14S = tri_R13S;
+                    next_color_R14U = color_R13U;
+                    next_sample_R14S = box_R13S[0];
+                    next_validSamp_R14H = (validTri_R13H ? 1'b1 : 1'b0);
+                    next_halt_RnnnnL = (validTri_R13H ? 1'b0 : 1'b1);
+                    next_box_R14S = box_R13S;
+                    next_state_R14H = ((validTri_R13H)? TEST_STATE : WAIT_STATE);
             end
             TEST_STATE : begin
+                //$display("beginning of teststate");
+                next_tri_R14S = tri_R14S;
                 next_box_R14S = box_R14S;
-                next_tri_R14S = tri_R14S; //iffy about this
                 next_color_R14U = color_R14U;
 
-                if (!at_right_edg_R14H && !at_top_edg_R14H) begin
-                    next_sample_R14S = next_rt_samp_R14S;
+                if (!at_end_box_R14H && !at_right_edg_R14H) begin
+                    next_sample_R14S = next_rt_samp_R14S;     
                     next_validSamp_R14H = 1'b1;
                     next_halt_RnnnnL = 1'b0;
                     next_state_R14H = TEST_STATE;
                 end
-                else if (at_right_edg_R14H && !at_top_edg_R14H) begin
-                    next_sample_R14S = next_up_samp_R14S;
+                else if (!at_end_box_R14H && at_right_edg_R14H) begin
+                    next_sample_R14S = next_up_samp_R14S;     
                     next_validSamp_R14H = 1'b1;
                     next_halt_RnnnnL = 1'b0;
                     next_state_R14H = TEST_STATE;
                 end
                 else begin
-                    next_sample_R14S = box_R14S[0]; //ll bbox
+                    next_sample_R14S = box_R14S[0];     
                     next_validSamp_R14H = 1'b0;
                     next_halt_RnnnnL = 1'b1;
                     next_state_R14H = WAIT_STATE;
@@ -367,19 +396,16 @@ if(MOD_FSM == 0) begin // Using baseline FSM
 
     // Write assertions to verify your FSM transition sequence
     // Can you verify that:
-    // 1) A validTri_R13H signal causes a transition from WAIT state to TEST state
+    // 1) A validTri_R14H signal causes a transition from WAIT state to TEST state
     // 2) An end_box_R14H signal causes a transition from TEST state to WAIT state
     // 3) What are you missing?
 
     //Your assertions goes here
     // START CODE HERE
-    assert property (@(posedge clk) validTri_R13H && state_R14H==WAIT_STATE |-> next_state_R14H==TEST_STATE);
-    assert property (@(posedge clk) at_top_edg_R14H && state_R14H==TEST_STATE |-> next_state_R14H==WAIT_STATE);
-    assert property (@(posedge clk) next_halt_RnnnnL && state_R14H==TEST_STATE |-> next_state_R14H==WAIT_STATE);
-    assert property (@(posedge clk) next_halt_RnnnnL && state_R14H==WAIT_STATE |=> state_R14H==WAIT_STATE);
+    assert property(@(posedge clk) state_R14H==WAIT_STATE && validTri_R13H==1'b1 |-> next_state_R14H==TEST_STATE);
+    assert property(@(posedge clk) state_R14H==TEST_STATE && at_end_box_R14H==1'b1 |-> next_state_R14H==WAIT_STATE);
     // END CODE HERE
     // Assertion ends
-
     //////
     //////  RTL code for original FSM Finishes
     //////
@@ -395,13 +421,15 @@ if(MOD_FSM == 0) begin // Using baseline FSM
 
     //Check that Proposed Sample is in BBox
     // START CODE HERE
-    assert property (rb_lt(rst, next_sample_R14S[0], next_box_R14S[1][0], next_validSamp_R14H)); //ns_x <= nb_ur_x
-    assert property (rb_lt(rst, next_sample_R14S[1], next_box_R14S[1][1], next_validSamp_R14H)); //ns_y <= nb_ur_y
-    assert property (rb_lt(rst, next_box_R14S[0][0], next_sample_R14S[0], next_validSamp_R14H)); //nb_ll_x <= ns_x
-    assert property (rb_lt(rst, next_box_R14S[0][1], next_sample_R14S[1], next_validSamp_R14H)); //nb_ur_y <= ns_y
+    assert property( rb_lt( rst, next_sample_R14S[0], next_box_R14S[1][0], next_validSamp_R14H ));
+    assert property( rb_lt( rst, next_sample_R14S[1], next_box_R14S[1][1], next_validSamp_R14H ));
+
+    assert property( rb_lt( rst, next_box_R14S[0][0], next_sample_R14S[0], validTri_R13H ));
+    assert property( rb_lt( rst, next_box_R14S[0][1], next_sample_R14S[1], validTri_R13H ));
+
     // END CODE HERE
     //Check that Proposed Sample is in BBox
-    
+
     //Error Checking Assertions
 end 
 else begin // Use modified FSM
@@ -420,3 +448,6 @@ end
 endgenerate
 
 endmodule
+
+
+
