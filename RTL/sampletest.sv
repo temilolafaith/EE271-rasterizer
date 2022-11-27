@@ -99,6 +99,16 @@ module sampletest
     logic signed [SIGFIG-1:0]       hit_R16S[AXIS-1:0]; // Sample position
     // Signals in Access Order
 
+
+    logic signed [SIGFIG-12:0]       edge_R16S000;
+    logic signed [SIGFIG-12:0]       edge_R16S001;
+    logic signed [SIGFIG-12:0]       edge_R16S010;
+    logic signed [SIGFIG-12:0]       edge_R16S011;
+    logic signed [SIGFIG-12:0]       edge_R16S100;
+    logic signed [SIGFIG-12:0]       edge_R16S101;
+    logic signed [SIGFIG-12:0]       edge_R16S110;
+    logic signed [SIGFIG-12:0]       edge_R16S111;
+
     // Your job is to produce the value for hit_valid_R16H signal, which indicates whether a sample lies inside the triangle.
     // hit_valid_R16H is high if validSamp_R16H && sample inside triangle (with back face culling)
     // Consider the following steps:
@@ -106,48 +116,51 @@ module sampletest
     // START CODE HERE
     // (1) Shift X, Y coordinates such that the fragment resides on the (0,0) position.
     // (2) Organize edges (form three edges for triangles)
-    // (3) Calculate distance x_1 * y_2 - x_2 * y_1
-    // (4) Check distance and assign hit_valid_R16H.
     always_comb begin
-        //(1) Shift X, Y coordinates such that the fragment resides on the (0,0) position.
-        tri_shift_R16S[0][0] = tri_R16S[0][0] - sample_R16S[0]; //v0, x
-        tri_shift_R16S[1][0] = tri_R16S[1][0] - sample_R16S[0]; //v1, x
-        tri_shift_R16S[2][0] = tri_R16S[2][0] - sample_R16S[0]; //v2, x
-        tri_shift_R16S[0][1] = tri_R16S[0][1] - sample_R16S[1]; //v0, y
-        tri_shift_R16S[1][1] = tri_R16S[1][1] - sample_R16S[1]; //v1, y
-        tri_shift_R16S[2][1] = tri_R16S[2][1] - sample_R16S[1]; //v2, y
+        // v0_x
+        edge_R16S[0][0][0] = tri_R16S[0][0] - sample_R16S[0];
+        edge_R16S[2][1][0] = tri_R16S[0][0] - sample_R16S[0];
 
-        // (2) Organize edges (form three edges for triangles)
-        edge_R16S[0] = tri_shift_R16S[1:0]; //e0
-        edge_R16S[1] = tri_shift_R16S[2:1]; //e1
-        edge_R16S[2][0] = tri_shift_R16S[2]; //e2_v2
-        edge_R16S[2][1] = tri_shift_R16S[0]; //e2_v0
+        // v0_y
+        edge_R16S[0][0][1] = tri_R16S[0][1] - sample_R16S[1];
+        edge_R16S[2][1][1] = tri_R16S[0][1] - sample_R16S[1];
 
+        // v1_x
+        edge_R16S[0][1][0] = tri_R16S[1][0] - sample_R16S[0];
+        edge_R16S[1][0][0] = tri_R16S[1][0] - sample_R16S[0];
 
-        //edge_R16S[0][0][0] = tri_shift_R16S[0][0]; //e0_x1
-        //edge_R16S[0][0][1] = tri_shift_R16S[0][1]; //e0_y1
-        //edge_R16S[0][1][0] = tri_shift_R16S[1][0]; //e0_x2
-        //edge_R16S[0][1][1] = tri_shift_R16S[1][1]; //e0_y2
+        // v1_y
+        edge_R16S[0][1][1] = tri_R16S[1][1] - sample_R16S[1];
+        edge_R16S[1][0][1] = tri_R16S[1][1] - sample_R16S[1];
 
-        // edge_R16S[1][0][0] = tri_shift_R16S[1][0]; //e1_x1
-        // edge_R16S[1][0][1] = tri_shift_R16S[1][1]; //e1_y1
-        // edge_R16S[1][1][0] = tri_shift_R16S[2][0]; //e1_x2
-        // edge_R16S[1][1][1] = tri_shift_R16S[2][1]; //e1_y2
+        // v2_x
+        edge_R16S[1][1][0] = tri_R16S[2][0] - sample_R16S[0];
+        edge_R16S[2][0][0] = tri_R16S[2][0] - sample_R16S[0];
 
-        // edge_R16S[2][0][0] = tri_shift_R16S[2][0]; //e2_x1
-        // edge_R16S[2][0][1] = tri_shift_R16S[2][1]; //e2_y1
-        // edge_R16S[2][1][0] = tri_shift_R16S[0][0]; //e2_x2
-        // edge_R16S[2][1][1] = tri_shift_R16S[0][1]; //e2_y2
+        // v2_y
+        edge_R16S[1][1][1] = tri_R16S[2][1] - sample_R16S[1];
+        edge_R16S[2][0][1] = tri_R16S[2][1] - sample_R16S[1];
 
-        // (3) Calculate distance x_1 * y_2 - x_2 * y_1
-        dist_lg_R16S[0] = edge_R16S[0][0][0]*edge_R16S[0][1][1] - edge_R16S[0][1][0]*edge_R16S[0][0][1]; //e0_dist
-        dist_lg_R16S[1] = edge_R16S[1][0][0]*edge_R16S[1][1][1] - edge_R16S[1][1][0]*edge_R16S[1][0][1]; //e1_dist
-        dist_lg_R16S[2] = edge_R16S[2][0][0]*edge_R16S[2][1][1] - edge_R16S[2][1][0]*edge_R16S[2][0][1]; //e0_dist
+        // (3) Calculate distance x_1 * y_2 - x_2 * 
+        edge_R16S000 = edge_R16S[0][0][0][12:0];
+        edge_R16S001 = edge_R16S[0][0][1][12:0];
+        edge_R16S010 = edge_R16S[0][1][0][12:0];
+        edge_R16S011 = edge_R16S[0][1][1][12:0];
+        edge_R16S100 = edge_R16S[1][0][0][12:0];
+        edge_R16S101 = edge_R16S[1][0][1][12:0];
+        edge_R16S110 = edge_R16S[1][1][0][12:0];
+        edge_R16S111 = edge_R16S[1][1][1][12:0];
+
+        //$display("edge_R16S000 %b", edge_R16S000);
+        //$display("edge_R16S111 %b", edge_R16S111);
+
+        dist_lg_R16S[0] = edge_R16S000 * edge_R16S011 - edge_R16S010 * edge_R16S001;
+        dist_lg_R16S[1] = edge_R16S010 * edge_R16S111 - edge_R16S110 * edge_R16S011;
+        dist_lg_R16S[2] = edge_R16S110 * edge_R16S001 - edge_R16S000 * edge_R16S111;
 
         // (4) Check distance and assign hit_valid_R16H.
-        hit_valid_R16H = (dist_lg_R16S[0] < 0) && (dist_lg_R16S[1] < 0) && (dist_lg_R16S[2] < 0);
-    end 
-
+        hit_valid_R16H = (dist_lg_R16S[0] <= 0) && (dist_lg_R16S[1] < 0) && (dist_lg_R16S[2] <= 0);
+    end
     // END CODE HERE
 
     //Assertions to help debug
@@ -256,3 +269,6 @@ module sampletest
     /* Flop R18_retime to R18 with fixed registers */
 
 endmodule
+
+
+
