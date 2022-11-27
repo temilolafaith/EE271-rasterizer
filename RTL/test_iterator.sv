@@ -254,8 +254,10 @@ if(MOD_FSM == 0) begin // Using baseline FSM
         // START CODE HERE
         unique case(1'b1) //REVERSE CASE STATEMENT FOR ONE-HOT SIGNALS
             subSample_RnnnnU[0]: begin //0001
-                next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
-                next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
+                // next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
+                // next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
+                next_rt_samp_R14S[1] = sample_R14S[1]; 
+                next_up_samp_R14S[0] = box_R14S[0][0];
 
                 next_rt_samp_R14S[0][SIGFIG-1:RADIX-3] = sample_R14S[0][SIGFIG-1:RADIX-3] + 1'b1;
                 next_rt_samp_R14S[0][RADIX-4:0] = sample_R14S[0][RADIX-4:0];
@@ -263,8 +265,10 @@ if(MOD_FSM == 0) begin // Using baseline FSM
                 next_up_samp_R14S[1][RADIX-4:0] = sample_R14S[1][RADIX-4:0];
             end
             subSample_RnnnnU[1]: begin //0010
-                next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
-                next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
+                next_rt_samp_R14S[1] = sample_R14S[1]; 
+                next_up_samp_R14S[0] = box_R14S[0][0];
+                // next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
+                // next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
 
                 next_rt_samp_R14S[0][SIGFIG-1:RADIX-2] = sample_R14S[0][SIGFIG-1:RADIX-2] + 1'b1;
                 next_rt_samp_R14S[0][RADIX-3:0] = sample_R14S[0][RADIX-3:0];
@@ -272,6 +276,8 @@ if(MOD_FSM == 0) begin // Using baseline FSM
                 next_up_samp_R14S[1][RADIX-3:0] = sample_R14S[1][RADIX-3:0];
             end
             subSample_RnnnnU[2]: begin //0100
+                next_rt_samp_R14S[1] = sample_R14S[1]; 
+                next_up_samp_R14S[0] = box_R14S[0][0];
                 next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
                 next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
 
@@ -281,6 +287,8 @@ if(MOD_FSM == 0) begin // Using baseline FSM
                 next_up_samp_R14S[1][RADIX-2:0] = sample_R14S[1][RADIX-2:0];
             end
             subSample_RnnnnU[3]: begin //1000
+                next_rt_samp_R14S[1] = sample_R14S[1]; 
+                next_up_samp_R14S[0] = box_R14S[0][0];
                 next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
                 next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
 
@@ -368,7 +376,7 @@ if(MOD_FSM == 0) begin // Using baseline FSM
     assert property (@(posedge clk) validTri_R13H && state_R14H==WAIT_STATE |-> next_state_R14H==TEST_STATE);
     assert property (@(posedge clk) at_top_edg_R14H && state_R14H==TEST_STATE |-> next_state_R14H==WAIT_STATE);
     assert property (@(posedge clk) next_halt_RnnnnL && state_R14H==TEST_STATE |-> next_state_R14H==WAIT_STATE);
-    assert property (@(posedge clk) !next_halt_RnnnnL && state_R14H==WAIT_STATE |=> state_R14H==WAIT_STATE);
+    assert property (@(posedge clk) next_halt_RnnnnL && state_R14H==WAIT_STATE |=> state_R14H==WAIT_STATE);
     // END CODE HERE
     // Assertion ends
 
