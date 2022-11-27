@@ -180,7 +180,7 @@ module bbox
     // bouding box. The leftmost [1:0] dimensions refer to LL/UR, while the rightmost 
     // [1:0] dimensions refer to X or Y coordinates. Each select signal should be a 3-bit 
     // one-hot signal, where the bit that is high represents which one of the 3 triangle vertices 
-    // should be chosen for that bbox coordinate. As an example, if we have: bbox_sel_R10H[0][0] = 3'b001
+    // should be chosen for that bbox coordinate. As an example, if we have: bbox_sel_R10H[0][0] = 3'b001
     // then this indicates that the lower left x-coordinate of your bounding box should be assigned to the 
     // x-coordinate of triangle "vertex a". 
     
