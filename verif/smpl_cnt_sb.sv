@@ -121,21 +121,21 @@ module smpl_cnt_sb
     end
 
     // Call the DPI function that checks that the hash produces the correct jittered samples
+    // Should only be called if reset is not asserted
     // START CODE HERE
     always @( posedge clk ) begin
         #10;
         if( reset_to_zero && validSamp_RnnH ) begin
             if(one != check_hash(
-                    int'(s_x_RnnS),   
-                    int'(s_y_RnnS),   
-                    ss_w_lg2,   
-                    int'(jitter_x_RnnS),   
-                    int'(jitter_y_RnnS),   
-                    int'(s_j_x_RnnS),   
-                    int'(s_j_y_RnnS)
-                    )) begin
-
-                $finish();
+                int'(s_x_RnnS),
+                int'(s_y_RnnS),
+                int'(ss_w_lg2),
+                int'(jitter_x_RnnS),
+                int'(jitter_y_RnnS),
+                int'(s_j_x_RnnS),
+                int'(s_j_y_RnnS)
+            )) begin
+            $finish();
             end
         end
     end
@@ -146,23 +146,23 @@ module smpl_cnt_sb
     always @( posedge clk ) begin
         #10;
         if( reset_to_zero && validSamp_RnnH ) begin
-            if(one != check_hit_count(
-                    int'(tri_RnnS[0][0]),   //triangle
-                    int'(tri_RnnS[0][1]),   //triangle
-                    int'(tri_RnnS[1][0]),   //triangle
-                    int'(tri_RnnS[1][1]),   //triangle
-                    int'(tri_RnnS[2][0]),   //triangle
-                    int'(tri_RnnS[2][1]),   //triangle
-                    hit_count,               //Number of Samples in triangle
-                    ss_w_lg2,                //Subsample
-                    int'(screen_RnnnnS[0] ), //Screen
-                    int'(screen_RnnnnS[1] ), //Screen
-                    RADIX,                   //Config
-                    int'( 128'd1 << RADIX )  //Congig
-                    )) begin
+            // if(one != check_hit_count(
+            //        int'(tri_RnnS[0][0]),   //triangle
+            //        int'(tri_RnnS[0][1]),   //triangle
+            //        int'(tri_RnnS[1][0]),   //triangle
+            //        int'(tri_RnnS[1][1]),   //triangle
+            //        int'(tri_RnnS[2][0]),   //triangle
+            //        int'(tri_RnnS[2][1]),   //triangle
+            //        hit_count,               //Number of Samples in triangle
+            //        ss_w_lg2,                //Subsample
+            //        int'(screen_RnnnnS[0] ), //Screen
+            //        int'(screen_RnnnnS[1] ), //Screen
+            //        RADIX,                   //Config
+            //        int'( 128'd1 << RADIX )  //Congig
+            //        )) begin
 
-                $finish();
-            end
+            //    $finish();
+            // end
         end
     end
 
