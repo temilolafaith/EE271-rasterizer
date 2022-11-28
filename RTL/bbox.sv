@@ -155,17 +155,21 @@ module bbox
     logic signed [SIGFIG-1:0]   rounded_box_R10S[1:0][1:0];
     // Step 3 Result: LL and UR X, Y Fixed Point Values after Clipping
     logic signed [SIGFIG-1:0]   out_box_R10S[1:0][1:0];      // bounds for output
-    // Step 3 Result: valid if validTri_R10H && BBox within screen
-    logic                           outvalid_R10H;               // output is valid
-
+    
     //End R10 Signals
 
     // Begin output for retiming registers
     logic signed [SIGFIG-1:0]   tri_R13S_retime[VERTS-1:0][AXIS-1:0]; // 4 Sets X,Y Fixed Point Values
     logic unsigned [SIGFIG-1:0] color_R13U_retime[COLORS-1:0];        // Color of Tri
-    logic signed [SIGFIG-1:0]   box_R13S_retime[1:0][1:0];             // 2 Sets X,Y Fixed Point Values
     logic                           validTri_R13H_retime ;                 // Valid Data for Operation
     // End output for retiming registers
+
+    logic signed [SIGFIG-1:0]   out_box_R13S_retime[1:0][1:0];      // bounds for output
+    logic signed [SIGFIG-1:0]   box_R13S_retime[1:0][1:0];             // 2 Sets X,Y Fixed Point Values
+    // Step 3 Result: valid if validTri_R10H && BBox within screen
+    logic                           outvalid_R13H_retime;               // output is valid
+
+
 
     // ********** Step 1:  Determining a Bounding Box **********
     // Here you need to determine the bounding box by comparing the vertices
@@ -349,44 +353,31 @@ module bbox
         // assign out_box_R10S[1][1] = (rounded_box_R10S[1][1] < screen_RnnnnS[1]) ? rounded_box_R10S[1][1] : screen_RnnnnS[1];
         // assign out_box_R10S[0][0] = (rounded_box_R10S[0][0] > 1'b0) ? rounded_box_R10S[0][0] : 1'b0;
         // assign out_box_R10S[0][1] = (rounded_box_R10S[0][1] > 1'b0) ? rounded_box_R10S[0][1] : 1'b0;        
-        out_box_R10S[0][0] = (box_R10S[0][0] >= 0) ? rounded_box_R10S[0][0] : 0;
-        out_box_R10S[0][1] = (box_R10S[0][1] >= 0) ? rounded_box_R10S[0][1] : 0;
+        out_box_R13S_retime[0][0] = (box_R13S_retime[0][0] >= 0) ? box_R13S_retime[0][0] : 0;
+        out_box_R13S_retime[0][1] = (box_R13S_retime[0][1] >= 0) ? box_R13S_retime[0][1] : 0;
 
-        out_box_R10S[1][0] = (box_R10S[1][0] <= screen_RnnnnS[0]) ? rounded_box_R10S[1][0] : screen_RnnnnS[0];
-        out_box_R10S[1][1] = (box_R10S[1][1] <= screen_RnnnnS[1]) ? rounded_box_R10S[1][1] : screen_RnnnnS[1];
+        out_box_R13S_retime[1][0] = (box_R13S_retime[1][0] <= screen_RnnnnS[0]) ? box_R13S_retime[1][0] : screen_RnnnnS[0];
+        out_box_R13S_retime[1][1] = (box_R13S_retime[1][1] <= screen_RnnnnS[1]) ? box_R13S_retime[1][1] : screen_RnnnnS[1];;
 
-        //Assertions to check BBox is not totally out of screen
-            // if (out_box_R10S[0][0] > screen_RnnnnS[0] && out_box_R10S[0][1] > screen_RnnnnS[1] && out_box_R10S[1][0] > screen_RnnnnS[0] && out_box_R10S[1][1] > screen_RnnnnS[1])
-            //     assign outvalid_R10H = 1'b0;
-            // else if (out_box_R10S[1][0] < 1'b0 && out_box_R10S[1][1] < 1'b0 && out_box_R10S[0][0] < 1'b0 && out_box_R10S[0][1] < 1'b0)
-            //     assign outvalid_R10H = 1'b0;
-            // else if (out_box_R10S[0][0] > screen_RnnnnS[0] && out_box_R10S[0][1] < 24'b0 && out_box_R10S[1][0] > screen_RnnnnS[0] && out_box_R10S[1][1] < 1'b0)
-            //     assign outvalid_R10H = 1'b0;
-            // else if (out_box_R10S[0][0] < 1'b0 && out_box_R10S[0][1] > screen_RnnnnS[1] && out_box_R10S[1][0] < 1'b0 && out_box_R10S[1][1] > screen_RnnnnS[1])
-            //     assign outvalid_R10H = 1'b0;
-            // else
-            //     assign outvalid_R10H = 1'b1;
-            // assign outvalid_R10H = validTri_R10H && outvalid_R10H;
-
-       if ((out_box_R10S[0][0] >= 0) && (out_box_R10S[0][1] >= 0) && (out_box_R10S[1][0] <= screen_RnnnnS[0]) && (out_box_R10S[1][1] <= screen_RnnnnS[1] && validTri_R10H))
-            outvalid_R10H = 1'b1;
+       if ((out_box_R13S_retime[0][0] >= 0) && (out_box_R13S_retime[0][1] >= 0) && (out_box_R13S_retime[1][0] <= screen_RnnnnS[0]) && (out_box_R13S_retime[1][1] <= screen_RnnnnS[1] && validTri_R13H_retime))
+            outvalid_R13H_retime = 1'b1;
         else
-            outvalid_R10H = 1'b0;       
+            outvalid_R13H_retime = 1'b0;       
         // END CODE HERE    
     end
 
     //Assertions to check BBox is not totally out of screen
-    assert property( @(posedge clk) (out_box_R10S[0][0] >= 0));
-    assert property( @(posedge clk) (out_box_R10S[0][1] >= 0));
-    assert property( @(posedge clk) (out_box_R10S[1][0] <= screen_RnnnnS[0]));
-    assert property( @(posedge clk) (out_box_R10S[1][1] <= screen_RnnnnS[1]));
+    assert property( @(posedge clk) (out_box_R13S_retime[0][0] >= 0));
+    assert property( @(posedge clk) (out_box_R13S_retime[0][1] >= 0));
+    assert property( @(posedge clk) (out_box_R13S_retime[1][0] <= screen_RnnnnS[0]));
+    assert property( @(posedge clk) (out_box_R13S_retime[1][1] <= screen_RnnnnS[1]));
 
 
 
 
     //Assertion for checking if outvalid_R10H has been assigned properly
-    assert property( @(posedge clk) (outvalid_R10H |-> out_box_R10S[1][0] <= screen_RnnnnS[0]));
-    assert property( @(posedge clk) (outvalid_R10H |-> out_box_R10S[1][1] <= screen_RnnnnS[1]));
+    assert property( @(posedge clk) (outvalid_R13H_retime |-> out_box_R13S_retime[1][0] <= screen_RnnnnS[0]));
+    assert property( @(posedge clk) (outvalid_R13H_retime |-> out_box_R13S_retime[1][1] <= screen_RnnnnS[1]));
     //assert property( @(posedge clk) !halt_RnnnnL |-> !outvalid_R10H);
 
     // ***************** End of Step 3 *********************
@@ -434,7 +425,7 @@ module bbox
         .clk    (clk            ),
         .reset  (rst            ),
         .en     (halt_RnnnnL    ),
-        .in     (out_box_R10S   ),
+        .in     (rounded_box_R10S),
         .out    (box_R13S_retime)
     );
 
@@ -448,7 +439,7 @@ module bbox
         .clk    (clk                    ),
         .reset  (rst                    ),
         .en     (halt_RnnnnL            ),
-        .in     (outvalid_R10H          ),
+        .in     (validTri_R10H          ),
         .out    (validTri_R13H_retime   )
     );
     //Flop Clamped Box to R13_retime with retiming registers
@@ -497,7 +488,7 @@ module bbox
         .clk    (clk            ),
         .reset  (rst            ),
         .en     (halt_RnnnnL    ),
-        .in     (box_R13S_retime),
+        .in     (out_box_R13S_retime),
         .out    (box_R13S       )
     );
 
@@ -511,7 +502,7 @@ module bbox
         .clk    (clk                    ),
         .reset  (rst                    ),
         .en     (halt_RnnnnL            ),
-        .in     (validTri_R13H_retime   ),
+        .in     (outvalid_R13H_retime   ),
         .out    (validTri_R13H          )
     );
     //Flop R13_retime to R13 with fixed registers
