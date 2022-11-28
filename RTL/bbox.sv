@@ -377,9 +377,9 @@ module bbox
 
     //Assertions to check BBox is not totally out of screen
     assert property( @(posedge clk) (out_box_R10S[0][0] >= 0));
-    assert property( @(posedge clk) (out_box_R10S[1][0] >= 0));
-    assert property( @(posedge clk) (out_box_R10S[0][1] <= screen_RnnnnS[0]));
-    assert property( @(posedge clk) (out_box_R10S[0][0] <= screen_RnnnnS[1]));
+    assert property( @(posedge clk) (out_box_R10S[0][1] >= 0));
+    assert property( @(posedge clk) (out_box_R10S[1][0] <= screen_RnnnnS[0]));
+    assert property( @(posedge clk) (out_box_R10S[1][1] <= screen_RnnnnS[1]));
 
 
 
