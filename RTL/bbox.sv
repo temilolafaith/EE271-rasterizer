@@ -180,7 +180,7 @@ module bbox
     // bouding box. The leftmost [1:0] dimensions refer to LL/UR, while the rightmost 
     // [1:0] dimensions refer to X or Y coordinates. Each select signal should be a 3-bit 
     // one-hot signal, where the bit that is high represents which one of the 3 triangle vertices 
-    // should be chosen for that bbox coordinate. As an example, if we have: bbox_sel_R10H[0][0] = 3'b001
+    // should be chosen for that bbox coordinate. As an example, if we have: bbox_sel_R10H[0][0] = 3'b001
     // then this indicates that the lower left x-coordinate of your bounding box should be assigned to the 
     // x-coordinate of triangle "vertex a". 
     
@@ -261,13 +261,13 @@ module bbox
 
     //Assertions to check UR is never less than LL and that box is valid (assign validTri_R10H???)
     // START CODE HERE
-    assert property (@(posedge clk) (box_R10S[0][0] <= box_R10S[1][0]) || !validTri_R10H);
-    assert property (@(posedge clk) (box_R10S[0][1] <= box_R10S[1][1]) || !validTri_R10H);
+    assert property (@(posedge clk) (box_R10S[0][0] <= box_R10S[1][0]) | !validTri_R10H);
+    assert property (@(posedge clk) (box_R10S[0][1] <= box_R10S[1][1]) | !validTri_R10H);
 
-    assert property (@(posedge clk) box_R10S[0][0] >= 0 || !validTri_R10H);
-    assert property (@(posedge clk) box_R10S[0][1] >= 0 || !validTri_R10H);
-    assert property (@(posedge clk) (box_R10S[1][0] <= screen_RnnnnS[0]) || !validTri_R10H);
-    assert property (@(posedge clk) (box_R10S[1][1] <= screen_RnnnnS[1]) || !validTri_R10H);
+    assert property (@(posedge clk) (box_R10S[0][0] >= 0) | !validTri_R10H);
+    assert property (@(posedge clk) (box_R10S[0][1] >= 0) | !validTri_R10H);
+    assert property (@(posedge clk) (box_R10S[1][0] <= screen_RnnnnS[0]) | !validTri_R10H);
+    assert property (@(posedge clk) (box_R10S[1][1] <= screen_RnnnnS[1]) | !validTri_R10H);
 
 
 
@@ -295,28 +295,28 @@ module bbox
     //       to a mask would allow you to do this operation
     //       as a bitwise and operation.
 
-//Round LowerLeft and UpperRight for X and Y
+    //Round LowerLeft and UpperRight for X and Y
     generate
-    for(genvar i = 0; i < 2; i = i + 1) begin
-        for(genvar j = 0; j < 2; j = j + 1) begin
+        for(genvar i = 0; i < 2; i = i + 1) begin
+            for(genvar j = 0; j < 2; j = j + 1) begin
 
-            always_comb begin
-                //Integer Portion of LL and UR Remains the Same
-                rounded_box_R10S[i][j][SIGFIG-1:RADIX] = box_R10S[i][j][SIGFIG-1:RADIX];
-                //////// ASSIGN FRACTIONAL PORTION
-                // START CODE HERE
-                case(subSample_RnnnnU)
-                    4'b0001: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b111, {RADIX-3{1'b0}}}; //(RADIX-3){1'b0}
-                    4'b0010: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b110, {RADIX-3{1'b0}}};
-                    4'b0100: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b100, {RADIX-3{1'b0}}};
-                    4'b1000: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b000, {RADIX-3{1'b0}}};
-                endcase
-                // END CODE HERE
+                always_comb begin
+                    //Integer Portion of LL and UR Remains the Same
+                    rounded_box_R10S[i][j][SIGFIG-1:RADIX] = box_R10S[i][j][SIGFIG-1:RADIX];
+                    //////// ASSIGN FRACTIONAL PORTION
+                    // START CODE HERE
+                    case(subSample_RnnnnU)
+                        4'b0001: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b111, {RADIX-3{1'b0}}}; //(RADIX-3){1'b0}
+                        4'b0010: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b110, {RADIX-3{1'b0}}};
+                        4'b0100: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b100, {RADIX-3{1'b0}}};
+                        4'b1000: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b000, {RADIX-3{1'b0}}};
+                    endcase
+                    // END CODE HERE
 
-            end // always_comb
+                end // always_comb
 
+            end
         end
-    end
     endgenerate
 
     //Assertion to help you debug errors in rounding
@@ -336,10 +336,10 @@ module bbox
     // Invalid if BBox is down/left of Screen
     // outvalid_R10H high if validTri_R10H && BBox is valid
     //logic halt_valid_control;
-    assert property (@(posedge clk) (rounded_box_R10S[0][0] >= 0) || !validTri_R10H);
-    assert property (@(posedge clk) (rounded_box_R10S[0][1] >= 0) || !validTri_R10H);
-    assert property (@(posedge clk) rounded_box_R10S[1][0] <= screen_RnnnnS[0] || !validTri_R10H);
-    assert property (@(posedge clk) rounded_box_R10S[1][1] <= screen_RnnnnS[1] || !validTri_R10H);
+    assert property (@(posedge clk) (rounded_box_R10S[0][0] >= 0) | !validTri_R10H);
+    assert property (@(posedge clk) (rounded_box_R10S[0][1] >= 0) | !validTri_R10H);
+    assert property (@(posedge clk) rounded_box_R10S[1][0] <= screen_RnnnnS[0] | !validTri_R10H);
+    assert property (@(posedge clk) rounded_box_R10S[1][1] <= screen_RnnnnS[1] | !validTri_R10H);
     
     always_comb begin
 
@@ -368,17 +368,21 @@ module bbox
             //     assign outvalid_R10H = 1'b1;
             // assign outvalid_R10H = validTri_R10H && outvalid_R10H;
 
-        // if ((out_box_R10S[0][0] >= 0) && (out_box_R10S[0][1] >= 0) && (out_box_R10S[1][0] <= screen_RnnnnS[0]) && (out_box_R10S[1][1] <= screen_RnnnnS[1]))
-        //     outvalid_R10H = 1'b1;
-        // else
-        //     outvalid_R10H = 1'b0;
-
        if ((out_box_R10S[0][0] >= 0) && (out_box_R10S[0][1] >= 0) && (out_box_R10S[1][0] <= screen_RnnnnS[0]) && (out_box_R10S[1][1] <= screen_RnnnnS[1] && validTri_R10H))
             outvalid_R10H = 1'b1;
         else
             outvalid_R10H = 1'b0;       
         // END CODE HERE    
     end
+
+    //Assertions to check BBox is not totally out of screen
+    assert property( @(posedge clk) (out_box_R10S[0][0] >= 0));
+    assert property( @(posedge clk) (out_box_R10S[1][0] >= 0));
+    assert property( @(posedge clk) (out_box_R10S[0][1] <= screen_RnnnnS[0]));
+    assert property( @(posedge clk) (out_box_R10S[0][0] <= screen_RnnnnS[1]));
+
+
+
 
     //Assertion for checking if outvalid_R10H has been assigned properly
     assert property( @(posedge clk) (outvalid_R10H |-> out_box_R10S[1][0] <= screen_RnnnnS[0]));
