@@ -306,10 +306,21 @@ module bbox
                     //////// ASSIGN FRACTIONAL PORTION
                     // START CODE HERE
                     case(subSample_RnnnnU)
-                        4'b0001: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b111, {RADIX-3{1'b0}}}; //(RADIX-3){1'b0}
-                        4'b0010: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b110, {RADIX-3{1'b0}}};
-                        4'b0100: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b100, {RADIX-3{1'b0}}};
-                        4'b1000: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b000, {RADIX-3{1'b0}}};
+                        4'b1000 : begin
+                        rounded_box_R10S[i][j][RADIX-1:0] = {RADIX{1'b0}};
+                        end
+                        4'b0100 : begin
+                        rounded_box_R10S[i][j][RADIX-1] = box_R10S[i][j][RADIX-1];
+                        rounded_box_R10S[i][j][RADIX-2:0] = {RADIX-1{1'b0}};
+                        end
+                        4'b0010 : begin
+                        rounded_box_R10S[i][j][RADIX-1:RADIX-2] = box_R10S[i][j][RADIX-1:RADIX-2];
+                        rounded_box_R10S[i][j][RADIX-3:0] = {RADIX-2{1'b0}};
+                        end
+                        4'b0001 : begin
+                        rounded_box_R10S[i][j][RADIX-1:RADIX-3] = box_R10S[i][j][RADIX-1:RADIX-3];
+                        rounded_box_R10S[i][j][RADIX-4:0] = {RADIX-3{1'b0}};
+                        end
                     endcase
                     // END CODE HERE
 
