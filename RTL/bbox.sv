@@ -180,12 +180,12 @@ module bbox
     // bouding box. The leftmost [1:0] dimensions refer to LL/UR, while the rightmost 
     // [1:0] dimensions refer to X or Y coordinates. Each select signal should be a 3-bit 
     // one-hot signal, where the bit that is high represents which one of the 3 triangle vertices 
-    // should be chosen for that bbox coordinate. As an example, if we have: bbox_sel_R10H[0][0] = 3'b001
+    // should be chosen for that bbox coordinate. As an example, if we have: bbox_sel_R10H[0][0] = 3'b001
     // then this indicates that the lower left x-coordinate of your bounding box should be assigned to the 
     // x-coordinate of triangle "vertex a". 
     
     //  DECLARE ANY OTHER SIGNALS YOU NEED
-    logic unsigned [RADIX-1:RADIX-3] mask; // mask used to bit and with box_R10S[i][j][RADIX-1:0] (fractional part)
+    // logic unsigned [2:0] mask; // mask used to bit and with box_R10S[i][j][RADIX-1:0] (fractional part)
     // Try declaring an always_comb block to assign values to box_R10S
     logic vert_cmp[1:0][2:0]; //compare vertices 
 
@@ -306,12 +306,22 @@ module bbox
                     rounded_box_R10S[i][j][SIGFIG-1:RADIX] = box_R10S[i][j][SIGFIG-1:RADIX];
                     //////// ASSIGN FRACTIONAL PORTION
                     // START CODE HERE
-                    mask = {box_R10S[i][j][RADIX-1:RADIX-3] & 3'b111}
-                    case(subSample_RnnnnU)
-                        4'b0001: rounded_box_R10S[i][j][RADIX-1:0] = {mask,{7'b0000000}}; //(RADIX-3){1'b0}
-                        4'b0010: rounded_box_R10S[i][j][RADIX-1:0] = {mask[RADIX-1:RADIX-2],{8'b00000000}};
-                        4'b0100: rounded_box_R10S[i][j][RADIX-1:0] = {mask[RADIX-1],{9'b000000000}};
-                        4'b1000: rounded_box_R10S[i][j][RADIX-1:0] = {10'b0000000000};
+                    unique case (subSample_RnnnnU)
+                        4'b1000 : begin
+                            rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {RADIX{1'b0}};
+                        end
+                        4'b0100 : begin
+                            rounded_box_R10S[i][j][RADIX-1] = box_R10S[i][j][RADIX-1] & 1'b1;
+                            rounded_box_R10S[i][j][RADIX-2:0] = box_R10S[i][j][RADIX-2:0] & {RADIX-1{1'b0}};
+                        end
+                        4'b0010 : begin
+                            rounded_box_R10S[i][j][RADIX-1:RADIX-2] = box_R10S[i][j][RADIX-1:RADIX-2] & 2'b11;
+                            rounded_box_R10S[i][j][RADIX-3:0] = box_R10S[i][j][RADIX-3:0] & {RADIX-2{1'b0}};
+                        end
+                        4'b0001 : begin
+                            rounded_box_R10S[i][j][RADIX-1:RADIX-3] = box_R10S[i][j][RADIX-1:RADIX-3] & 3'b111;
+                            rounded_box_R10S[i][j][RADIX-4:0] = box_R10S[i][j][RADIX-4:0] & {RADIX-3{1'b0}};
+                        end
                     endcase
                     // END CODE HERE
 
