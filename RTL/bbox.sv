@@ -307,11 +307,11 @@ module bbox
                     //////// ASSIGN FRACTIONAL PORTION
                     // START CODE HERE
                     case(subSample_RnnnnU)
-                        4'b0001: rounded_box_R10S[i][j][RADIX-1:0] = {10'b1110000000}; //(RADIX-3){1'b0}
-                        4'b0010: rounded_box_R10S[i][j][RADIX-1:0] = {10'b1100000000};
-                        4'b0100: rounded_box_R10S[i][j][RADIX-1:0] = {10'b1000000000};
+                        4'b0001: rounded_box_R10S[i][j][RADIX-1:0] = {{box_R10S[i][j][RADIX-1:RADIX-3] & 3'b111},{7'b0000000}}; //(RADIX-3){1'b0}
+                        4'b0010: rounded_box_R10S[i][j][RADIX-1:0] = {{box_R10S[i][j][RADIX-1:RADIX-2] & 2'b11},{8'b00000000}};
+                        4'b0100: rounded_box_R10S[i][j][RADIX-1:0] = {{box_R10S[i][j][RADIX-1] & 1'b1},{9'b000000000}};
                         4'b1000: rounded_box_R10S[i][j][RADIX-1:0] = {10'b0000000000};
-                endcase
+                    endcase
                     // END CODE HERE
 
                 end // always_comb
