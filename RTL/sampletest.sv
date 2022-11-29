@@ -65,7 +65,7 @@ module sampletest
     parameter VERTS         = 3, // Maximum Vertices in triangle
     parameter AXIS          = 3, // Number of axis foreach vertex 3 is (x,y,z).
     parameter COLORS        = 3, // Number of color channels
-    parameter PIPE_DEPTH    = 2 // How many pipe stages are in this block
+    parameter PIPE_DEPTH    = 3 // How many pipe stages are in this block
 )
 (
     input logic signed [SIGFIG-1:0]     tri_R16S[VERTS-1:0][AXIS-1:0], // triangle to Iterate Over
@@ -89,13 +89,17 @@ module sampletest
     logic signed [SIGFIG-1:0]       hit_R18S_retime[AXIS-1:0];   // Hit Location
     logic unsigned [SIGFIG-1:0]     color_R18U_retime[COLORS-1:0];   // Color of triangle
     logic                           hit_valid_R18H_retime;   // Is hit good
+
+    logic signed [SIGFIG-1:0]       edge_R18S[EDGES-1:0][1:0][1:0]; // Edges
+    logic signed [(2*SHORTSF)-1:0]  dist_lg_R18S_retime[2*EDGES-1:0]; // Result of x_1 * y_2 - x_2 * y_1
+
     // output for retiming registers
 
     // Signals in Access Order
     logic signed [SIGFIG-1:0]       tri_shift_R16S[VERTS-1:0][1:0]; // triangle after coordinate shift
     logic signed [SIGFIG-1:0]       edge_R16S[EDGES-1:0][1:0][1:0]; // Edges
-    logic signed [(2*SHORTSF)-1:0]  dist_lg_R16S[EDGES-1:0]; // Result of x_1 * y_2 - x_2 * y_1
-    logic                           hit_valid_R16H ; // Output (YOUR JOB!)
+    logic signed [(2*SHORTSF)-1:0]  dist_lg_R18S[2*EDGES-1:0]; // Result of x_1 * y_2 - x_2 * y_1
+    //logic                           hit_valid_R16H ; // Output (YOUR JOB!)
     logic signed [SIGFIG-1:0]       hit_R16S[AXIS-1:0]; // Sample position
     // Signals in Access Order
 
@@ -110,6 +114,13 @@ module sampletest
     // (4) Check distance and assign hit_valid_R16H.
     always_comb begin
         //(1) Shift X, Y coordinates such that the fragment resides on the (0,0) position.
+        // tri_shift_R16S[0][0] = tri_R16S[0][0] - sample_R16S[0]; //v0, x
+        // tri_shift_R16S[1][0] = tri_R16S[1][0] - sample_R16S[0]; //v1, x
+        // tri_shift_R16S[2][0] = tri_R16S[2][0] - sample_R16S[0]; //v2, x
+        // tri_shift_R16S[0][1] = tri_R16S[0][1] - sample_R16S[1]; //v0, y
+        // tri_shift_R16S[1][1] = tri_R16S[1][1] - sample_R16S[1]; //v1, y
+        // tri_shift_R16S[2][1] = tri_R16S[2][1] - sample_R16S[1]; //v2, y
+
         tri_shift_R16S[0][0] = tri_R16S[0][0] - sample_R16S[0]; //v0, x
         tri_shift_R16S[1][0] = tri_R16S[1][0] - sample_R16S[0]; //v1, x
         tri_shift_R16S[2][0] = tri_R16S[2][0] - sample_R16S[0]; //v2, x
@@ -118,41 +129,40 @@ module sampletest
         tri_shift_R16S[2][1] = tri_R16S[2][1] - sample_R16S[1]; //v2, y
 
         // (2) Organize edges (form three edges for triangles)
-        edge_R16S[0] = tri_shift_R16S[1:0]; //e0
-        edge_R16S[1] = tri_shift_R16S[2:1]; //e1
-        edge_R16S[2][0] = tri_shift_R16S[2]; //e2_v2
-        edge_R16S[2][1] = tri_shift_R16S[0]; //e2_v0
+        // edge_R16S[0] = tri_shift_R16S[1:0]; //e0
+        // edge_R16S[1] = tri_shift_R16S[2:1]; //e1
+        // edge_R16S[2][0] = tri_shift_R16S[2]; //e2_v2
+        // edge_R16S[2][1] = tri_shift_R16S[0]; //e2_v0
+    end 
 
+    always_comb begin
+        // // (3) Calculate distance x_1 * y_2 - x_2 * y_1
+        // dist_lg_R18S[0] = edge_R18S[0][0][0]*edge_R18S[0][1][1] - edge_R18S[0][1][0]*edge_R18S[0][0][1]; //e0_dist
+        // dist_lg_R18S[1] = edge_R18S[1][0][0]*edge_R18S[1][1][1] - edge_R18S[1][1][0]*edge_R18S[1][0][1]; //e1_dist
+        // dist_lg_R18S[2] = edge_R18S[2][0][0]*edge_R18S[2][1][1] - edge_R18S[2][1][0]*edge_R18S[2][0][1]; //e0_dist
 
-        //edge_R16S[0][0][0] = tri_shift_R16S[0][0]; //e0_x1
-        //edge_R16S[0][0][1] = tri_shift_R16S[0][1]; //e0_y1
-        //edge_R16S[0][1][0] = tri_shift_R16S[1][0]; //e0_x2
-        //edge_R16S[0][1][1] = tri_shift_R16S[1][1]; //e0_y2
-
-        // edge_R16S[1][0][0] = tri_shift_R16S[1][0]; //e1_x1
-        // edge_R16S[1][0][1] = tri_shift_R16S[1][1]; //e1_y1
-        // edge_R16S[1][1][0] = tri_shift_R16S[2][0]; //e1_x2
-        // edge_R16S[1][1][1] = tri_shift_R16S[2][1]; //e1_y2
-
-        // edge_R16S[2][0][0] = tri_shift_R16S[2][0]; //e2_x1
-        // edge_R16S[2][0][1] = tri_shift_R16S[2][1]; //e2_y1
-        // edge_R16S[2][1][0] = tri_shift_R16S[0][0]; //e2_x2
-        // edge_R16S[2][1][1] = tri_shift_R16S[0][1]; //e2_y2
-
-        // (3) Calculate distance x_1 * y_2 - x_2 * y_1
-        dist_lg_R16S[0] = edge_R16S[0][0][0]*edge_R16S[0][1][1] - edge_R16S[0][1][0]*edge_R16S[0][0][1]; //e0_dist
-        dist_lg_R16S[1] = edge_R16S[1][0][0]*edge_R16S[1][1][1] - edge_R16S[1][1][0]*edge_R16S[1][0][1]; //e1_dist
-        dist_lg_R16S[2] = edge_R16S[2][0][0]*edge_R16S[2][1][1] - edge_R16S[2][1][0]*edge_R16S[2][0][1]; //e0_dist
-
+        dist_lg_R18S[0] = tri_shift_R16S[0][0][12:0]*tri_shift_R16S[1][1][12:0];
+        dist_lg_R18S[1] = tri_shift_R16S[1][0][12:0]*tri_shift_R16S[0][1][12:0]; //e0_dist
+        dist_lg_R18S[2] = tri_shift_R16S[1][0][12:0]*tri_shift_R16S[2][1][12:0];
+        dist_lg_R18S[3] = tri_shift_R16S[2][0][12:0]*tri_shift_R16S[1][1][12:0]; //e1_dist
+        dist_lg_R18S[4] = tri_shift_R16S[2][0][12:0]*tri_shift_R16S[1][1][12:0];
+        dist_lg_R18S[5] = tri_shift_R16S[0][0][12:0]*tri_shift_R16S[2][1][12:0]; //e0_dist
+    end
+    always_comb begin
         // (4) Check distance and assign hit_valid_R16H.
-        hit_valid_R16H = (dist_lg_R16S[0] <= 0) && (dist_lg_R16S[1] < 0) && (dist_lg_R16S[2] <= 0);
+        hit_valid_R18H_retime = ((dist_lg_R18S_retime[0] - dist_lg_R18S_retime[1] <= 0) && ((dist_lg_R18S_retime[2] -dist_lg_R18S_retime[3]) < 0) && ((dist_lg_R18S_retime[4]-dist_lg_R18S_retime[5]) <= 0));
     end 
 
     // END CODE HERE
 
-    //Assertions to help debug
+    // //Assertions to help debug
+    // property rb_et( rst, a , b );
+    //     @(posedge clk) rst | ((a==b));
+    // endproperty
+
     //Check if correct inequalities have been used
-    assert property( @(posedge clk) (dist_lg_R16S[1] == 0) |-> !hit_valid_R16H);
+    assert property( @(posedge clk) ((dist_lg_R18S_retime[2] -dist_lg_R18S_retime[3]) == 0) |-> !hit_valid_R18H_retime);
+    // assert property( @(posedge clk) (edge_R16S |-> edge_R18S);
 
     //Calculate Depth as depth of first vertex
     // Note that a barrycentric interpolation would
@@ -193,19 +203,81 @@ module sampletest
         .out    (color_R18U_retime  )
     );
 
-    dff_retime #(
-        .WIDTH          (1              ),
-        .PIPE_DEPTH     (PIPE_DEPTH - 1 ),
-        .RETIME_STATUS  (1              ) // RETIME
+    dff3 #(
+        .WIDTH(SIGFIG),
+        .ARRAY_SIZE1(2),
+        .ARRAY_SIZE2(2),
+        .PIPE_DEPTH(PIPE_DEPTH - 2),
+        .RETIME_STATUS(0)
     )
-    d_samp_r3
+    d_samp_r4
     (
-        .clk    (clk                    ),
-        .reset  (rst                    ),
-        .en     (1'b1                   ),
-        .in     (hit_valid_R16H         ),
-        .out    (hit_valid_R18H_retime  )
+        .clk    (clk             ),
+        .reset  (rst             ),
+        .en     (1'b1            ),
+        .in     (edge_R16S[0]    ),
+        .out    (edge_R18S[0]    )
     );
+
+        dff3 #(
+        .WIDTH(SIGFIG),
+        .ARRAY_SIZE1(2),
+        .ARRAY_SIZE2(2),
+        .PIPE_DEPTH(PIPE_DEPTH - 2),
+        .RETIME_STATUS(0)
+    )
+    d_samp_r5
+    (
+        .clk    (clk             ),
+        .reset  (rst             ),
+        .en     (1'b1            ),
+        .in     (edge_R16S[1]    ),
+        .out    (edge_R18S[1]    )
+    );
+
+    dff3 #(
+        .WIDTH(SIGFIG),
+        .ARRAY_SIZE1(2),
+        .ARRAY_SIZE2(2),
+        .PIPE_DEPTH(PIPE_DEPTH - 2),
+        .RETIME_STATUS(0)
+    )
+    d_samp_r6
+    (
+        .clk    (clk             ),
+        .reset  (rst             ),
+        .en     (1'b1            ),
+        .in     (edge_R16S[2]    ),
+        .out    (edge_R18S[2]    )
+    );
+
+    dff2 #(
+        .WIDTH          (2*SHORTSF ),
+        .ARRAY_SIZE     (2*EDGES   ),
+        .PIPE_DEPTH     (1      ),
+        .RETIME_STATUS  (0      )
+    )
+    d_samp_r7
+    (
+        .clk    (clk            ),
+        .reset  (rst            ),
+        .en     (1'b1           ),
+        .in     (dist_lg_R18S),
+        .out    (dist_lg_R18S_retime       )
+    );
+    // dff_retime #(
+    //     .WIDTH          (1              ),
+    //     .PIPE_DEPTH     (PIPE_DEPTH - 1 ),
+    //     .RETIME_STATUS  (1              ) // RETIME
+    // )
+    // d_samp_r3
+    // (
+    //     .clk    (clk                    ),
+    //     .reset  (rst                    ),
+    //     .en     (1'b1                   ),
+    //     .in     (hit_valid_R16H         ),
+    //     .out    (hit_valid_R18H_retime  )
+    // );
     /* Flop R16 to R18_retime with retiming registers*/
 
     /* Flop R18_retime to R18 with fixed registers */
