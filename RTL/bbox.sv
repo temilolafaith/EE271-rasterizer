@@ -214,32 +214,32 @@ module bbox
         bbox_sel_R10H[1][1][1] =  vert_cmp[1][0] & !vert_cmp[1][2]  ; 
         bbox_sel_R10H[1][1][2] =  vert_cmp[1][1] &  vert_cmp[1][2]  ; 
 
-        unique case(1'b1)
-            bbox_sel_R10H[0][0][0]: box_R10S[0][0] = tri_R10S[0][0];
-            bbox_sel_R10H[0][0][1]: box_R10S[0][0] = tri_R10S[1][0];
-            bbox_sel_R10H[0][0][2]: box_R10S[0][0] = tri_R10S[2][0];
-            //default: box_R10S[0][0] = 24'b0;
+        case(bbox_sel_R10H[0][0])
+            3'b001: box_R10S[0][0] = tri_R10S[0][0];
+            3'b010: box_R10S[0][0] = tri_R10S[1][0];
+            3'b100: box_R10S[0][0] = tri_R10S[2][0];
+            default: box_R10S[0][0] = tri_R10S[0][0];
         endcase
 
-        unique case(1'b1)
-            bbox_sel_R10H[0][1][0]: box_R10S[0][1] = tri_R10S[0][1];
-            bbox_sel_R10H[0][1][1]: box_R10S[0][1] = tri_R10S[1][1];
-            bbox_sel_R10H[0][1][2]: box_R10S[0][1] = tri_R10S[2][1];
-            //default: box_R10S[0][1] = 24'b0;
+        case(bbox_sel_R10H[0][1])
+            3'b001: box_R10S[0][1] = tri_R10S[0][1];
+            3'b010: box_R10S[0][1] = tri_R10S[1][1];
+            3'b100: box_R10S[0][1] = tri_R10S[2][1];
+            default: box_R10S[0][1] = tri_R10S[0][1];
         endcase
 
-        unique case(1'b1)
-            bbox_sel_R10H[1][0][0]: box_R10S[1][0] = tri_R10S[0][0];
-            bbox_sel_R10H[1][0][1]: box_R10S[1][0] = tri_R10S[1][0];
-            bbox_sel_R10H[1][0][2]: box_R10S[1][0] = tri_R10S[2][0];
-            //default: box_R10S[1][0] = 24'b0;
+        case(bbox_sel_R10H[1][0])
+            3'b001: box_R10S[1][0] = tri_R10S[0][0];
+            3'b010: box_R10S[1][0] = tri_R10S[1][0];
+            3'b100: box_R10S[1][0] = tri_R10S[2][0];
+            default: box_R10S[1][0] = tri_R10S[0][0];
         endcase
 
-        unique case(1'b1)
-            bbox_sel_R10H[1][1][0]: box_R10S[1][1] = tri_R10S[0][1];
-            bbox_sel_R10H[1][1][1]: box_R10S[1][1] = tri_R10S[1][1];
-            bbox_sel_R10H[1][1][2]: box_R10S[1][1] = tri_R10S[2][1];
-            //default: box_R10S[1][1] = 24'b0;
+        case(bbox_sel_R10H[1][1])
+            3'b001: box_R10S[1][1] = tri_R10S[0][1];
+            3'b010: box_R10S[1][1] = tri_R10S[1][1];
+            3'b100: box_R10S[1][1] = tri_R10S[2][1];
+            default: box_R10S[1][1] = tri_R10S[0][1];
         endcase
     end
     
@@ -264,10 +264,11 @@ module bbox
     assert property (@(posedge clk) (box_R10S[0][0] <= box_R10S[1][0]) | !validTri_R10H);
     assert property (@(posedge clk) (box_R10S[0][1] <= box_R10S[1][1]) | !validTri_R10H);
 
-    assert property (@(posedge clk) (box_R10S[0][0] >= 0) | !validTri_R10H);
-    assert property (@(posedge clk) (box_R10S[0][1] >= 0) | !validTri_R10H);
-    assert property (@(posedge clk) (box_R10S[1][0] <= screen_RnnnnS[0]) | !validTri_R10H);
-    assert property (@(posedge clk) (box_R10S[1][1] <= screen_RnnnnS[1]) | !validTri_R10H);
+    //Can't assert this before clipping
+    // assert property (@(posedge clk) (box_R10S[0][0] >= 0) | !validTri_R10H);
+    // assert property (@(posedge clk) (box_R10S[0][1] >= 0) | !validTri_R10H);
+    // assert property (@(posedge clk) (box_R10S[1][0] <= screen_RnnnnS[0]) | !validTri_R10H);
+    // assert property (@(posedge clk) (box_R10S[1][1] <= screen_RnnnnS[1]) | !validTri_R10H);
 
 
 
@@ -306,11 +307,11 @@ module bbox
                     //////// ASSIGN FRACTIONAL PORTION
                     // START CODE HERE
                     case(subSample_RnnnnU)
-                        4'b0001: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b111, {RADIX-3{1'b0}}}; //(RADIX-3){1'b0}
-                        4'b0010: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b110, {RADIX-3{1'b0}}};
-                        4'b0100: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b100, {RADIX-3{1'b0}}};
-                        4'b1000: rounded_box_R10S[i][j][RADIX-1:0] = box_R10S[i][j][RADIX-1:0] & {3'b000, {RADIX-3{1'b0}}};
-                    endcase
+                        4'b0001: rounded_box_R10S[i][j][RADIX-1:0] = {10'b1110000000}; //(RADIX-3){1'b0}
+                        4'b0010: rounded_box_R10S[i][j][RADIX-1:0] = {10'b1100000000};
+                        4'b0100: rounded_box_R10S[i][j][RADIX-1:0] = {10'b1000000000};
+                        4'b1000: rounded_box_R10S[i][j][RADIX-1:0] = {10'b0000000000};
+                endcase
                     // END CODE HERE
 
                 end // always_comb
@@ -336,10 +337,12 @@ module bbox
     // Invalid if BBox is down/left of Screen
     // outvalid_R10H high if validTri_R10H && BBox is valid
     //logic halt_valid_control;
-    assert property (@(posedge clk) (rounded_box_R10S[0][0] >= 0) | !validTri_R10H);
-    assert property (@(posedge clk) (rounded_box_R10S[0][1] >= 0) | !validTri_R10H);
-    assert property (@(posedge clk) rounded_box_R10S[1][0] <= screen_RnnnnS[0] | !validTri_R10H);
-    assert property (@(posedge clk) rounded_box_R10S[1][1] <= screen_RnnnnS[1] | !validTri_R10H);
+    
+    //Can't assert this before clipping
+    // assert property (@(posedge clk) (rounded_box_R10S[0][0] >= 0) | !validTri_R10H);
+    // assert property (@(posedge clk) (rounded_box_R10S[0][1] >= 0) | !validTri_R10H);
+    // assert property (@(posedge clk) rounded_box_R10S[1][0] <= screen_RnnnnS[0] | !validTri_R10H);
+    // assert property (@(posedge clk) rounded_box_R10S[1][1] <= screen_RnnnnS[1] | !validTri_R10H);
     
     always_comb begin
 
