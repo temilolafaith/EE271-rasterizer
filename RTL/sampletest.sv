@@ -113,36 +113,15 @@ module sampletest
         tri_shift_R16S[0][0] = tri_R16S[0][0] - sample_R16S[0]; //v0, x
         tri_shift_R16S[1][0] = tri_R16S[1][0] - sample_R16S[0]; //v1, x
         tri_shift_R16S[2][0] = tri_R16S[2][0] - sample_R16S[0]; //v2, x
+
         tri_shift_R16S[0][1] = tri_R16S[0][1] - sample_R16S[1]; //v0, y
         tri_shift_R16S[1][1] = tri_R16S[1][1] - sample_R16S[1]; //v1, y
         tri_shift_R16S[2][1] = tri_R16S[2][1] - sample_R16S[1]; //v2, y
 
-        // (2) Organize edges (form three edges for triangles)
-        edge_R16S[0] = tri_shift_R16S[1:0]; //e0
-        edge_R16S[1] = tri_shift_R16S[2:1]; //e1
-        edge_R16S[2][0] = tri_shift_R16S[2]; //e2_v2
-        edge_R16S[2][1] = tri_shift_R16S[0]; //e2_v0
-
-
-        //edge_R16S[0][0][0] = tri_shift_R16S[0][0]; //e0_x1
-        //edge_R16S[0][0][1] = tri_shift_R16S[0][1]; //e0_y1
-        //edge_R16S[0][1][0] = tri_shift_R16S[1][0]; //e0_x2
-        //edge_R16S[0][1][1] = tri_shift_R16S[1][1]; //e0_y2
-
-        // edge_R16S[1][0][0] = tri_shift_R16S[1][0]; //e1_x1
-        // edge_R16S[1][0][1] = tri_shift_R16S[1][1]; //e1_y1
-        // edge_R16S[1][1][0] = tri_shift_R16S[2][0]; //e1_x2
-        // edge_R16S[1][1][1] = tri_shift_R16S[2][1]; //e1_y2
-
-        // edge_R16S[2][0][0] = tri_shift_R16S[2][0]; //e2_x1
-        // edge_R16S[2][0][1] = tri_shift_R16S[2][1]; //e2_y1
-        // edge_R16S[2][1][0] = tri_shift_R16S[0][0]; //e2_x2
-        // edge_R16S[2][1][1] = tri_shift_R16S[0][1]; //e2_y2
-
         // (3) Calculate distance x_1 * y_2 - x_2 * y_1
-        dist_lg_R16S[0] = edge_R16S[0][0][0]*edge_R16S[0][1][1] - edge_R16S[0][1][0]*edge_R16S[0][0][1]; //e0_dist
-        dist_lg_R16S[1] = edge_R16S[1][0][0]*edge_R16S[1][1][1] - edge_R16S[1][1][0]*edge_R16S[1][0][1]; //e1_dist
-        dist_lg_R16S[2] = edge_R16S[2][0][0]*edge_R16S[2][1][1] - edge_R16S[2][1][0]*edge_R16S[2][0][1]; //e0_dist
+        dist_lg_R16S[0] = tri_shift_R16S[0][0]*tri_shift_R16S[1][1] - tri_shift_R16S[1][0]*tri_shift_R16S[0][1]; //e0_dist
+        dist_lg_R16S[1] = tri_shift_R16S[1][0]*tri_shift_R16S[2][1] - tri_shift_R16S[2][0]*tri_shift_R16S[1][1]; //e1_dist
+        dist_lg_R16S[2] = tri_shift_R16S[2][0]*tri_shift_R16S[0][1] - tri_shift_R16S[0][0]*tri_shift_R16S[2][1]; //e0_dist
 
         // (4) Check distance and assign hit_valid_R16H.
         hit_valid_R16H = (dist_lg_R16S[0] <= 0) && (dist_lg_R16S[1] < 0) && (dist_lg_R16S[2] <= 0);
