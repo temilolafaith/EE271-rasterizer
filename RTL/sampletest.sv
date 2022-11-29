@@ -145,7 +145,7 @@ module sampletest
         dist_lg_R18S[1] = tri_shift_R16S[1][0][12:0]*tri_shift_R16S[0][1][12:0]; //e0_dist
         dist_lg_R18S[2] = tri_shift_R16S[1][0][12:0]*tri_shift_R16S[2][1][12:0];
         dist_lg_R18S[3] = tri_shift_R16S[2][0][12:0]*tri_shift_R16S[1][1][12:0]; //e1_dist
-        dist_lg_R18S[4] = tri_shift_R16S[2][0][12:0]*tri_shift_R16S[1][1][12:0];
+        dist_lg_R18S[4] = tri_shift_R16S[2][0][12:0]*tri_shift_R16S[0][1][12:0];
         dist_lg_R18S[5] = tri_shift_R16S[0][0][12:0]*tri_shift_R16S[2][1][12:0]; //e0_dist
     end
     always_comb begin
