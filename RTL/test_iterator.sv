@@ -241,7 +241,6 @@ if(MOD_FSM == 0) begin // Using baseline FSM
     logic                       at_right_edg_R14H;      //Current sample at right edge of bbox?
     logic                       at_top_edg_R14H;        //Current sample at top edge of bbox?
     logic                       at_end_box_R14H;        //Current sample at end of bbox?
-    logic                       at_bot_edg_R14H; 
 
     //////
     ////// First calculate the values of the helper signals using CURRENT STATES
