@@ -241,7 +241,6 @@ if(MOD_FSM == 0) begin // Using baseline FSM
     logic                       at_right_edg_R14H;      //Current sample at right edge of bbox?
     logic                       at_top_edg_R14H;        //Current sample at top edge of bbox?
     logic                       at_end_box_R14H;        //Current sample at end of bbox?
-    logic                       at_bot_edg_R14H; 
 
     //////
     ////// First calculate the values of the helper signals using CURRENT STATES
@@ -255,10 +254,8 @@ if(MOD_FSM == 0) begin // Using baseline FSM
         // START CODE HERE
         unique case(1'b1) //REVERSE CASE STATEMENT FOR ONE-HOT SIGNALS
             subSample_RnnnnU[0]: begin //0001
-                // next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
-                // next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
-                next_rt_samp_R14S[1] = sample_R14S[1]; 
-                next_up_samp_R14S[0] = box_R14S[0][0];
+                next_rt_samp_R14S[1] = sample_R14S[1]; //ll_y co-ord of sample location to be tested 
+                next_up_samp_R14S[0] = box_R14S[0][0]; //x co-ord of current bbox
 
                 next_rt_samp_R14S[0][SIGFIG-1:RADIX-3] = sample_R14S[0][SIGFIG-1:RADIX-3] + 1'b1;
                 next_rt_samp_R14S[0][RADIX-4:0] = sample_R14S[0][RADIX-4:0];
@@ -268,9 +265,7 @@ if(MOD_FSM == 0) begin // Using baseline FSM
             subSample_RnnnnU[1]: begin //0010
                 next_rt_samp_R14S[1] = sample_R14S[1]; 
                 next_up_samp_R14S[0] = box_R14S[0][0];
-                // next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
-                // next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
-
+                
                 next_rt_samp_R14S[0][SIGFIG-1:RADIX-2] = sample_R14S[0][SIGFIG-1:RADIX-2] + 1'b1;
                 next_rt_samp_R14S[0][RADIX-3:0] = sample_R14S[0][RADIX-3:0];
                 next_up_samp_R14S[1][SIGFIG-1:RADIX-2] = sample_R14S[1][SIGFIG-1:RADIX-2] + 1'b1;
@@ -279,9 +274,7 @@ if(MOD_FSM == 0) begin // Using baseline FSM
             subSample_RnnnnU[2]: begin //0100
                 next_rt_samp_R14S[1] = sample_R14S[1]; 
                 next_up_samp_R14S[0] = box_R14S[0][0];
-                // next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
-                // next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
-
+                
                 next_rt_samp_R14S[0][SIGFIG-1:RADIX-1]= sample_R14S[0][SIGFIG-1:RADIX-1] + 1'b1;
                 next_rt_samp_R14S[0][RADIX-2:0] = sample_R14S[0][RADIX-2:0];
                 next_up_samp_R14S[1][SIGFIG-1:RADIX-1] = sample_R14S[1][SIGFIG-1:RADIX-1] + 1'b1;
@@ -290,9 +283,7 @@ if(MOD_FSM == 0) begin // Using baseline FSM
             subSample_RnnnnU[3]: begin //1000
                 next_rt_samp_R14S[1] = sample_R14S[1]; 
                 next_up_samp_R14S[0] = box_R14S[0][0];
-                // next_rt_samp_R14S[1] = box_R14S[0][1]; //ll_y co-ord of current bbox
-                // next_up_samp_R14S[0] = sample_R14S[0];//x co-ord of sample location to be tested
-
+                
                 next_rt_samp_R14S[0][SIGFIG-1:RADIX]= sample_R14S[0][SIGFIG-1:RADIX] + 1'b1;
                 next_rt_samp_R14S[0][RADIX-1:0] = sample_R14S[0][RADIX-1:0];
                 next_up_samp_R14S[1][SIGFIG-1:RADIX] = sample_R14S[1][SIGFIG-1:RADIX] + 1'b1;
@@ -300,18 +291,9 @@ if(MOD_FSM == 0) begin // Using baseline FSM
             end
         endcase
 
-        if (sample_R14S[0] == box_R14S[1][0])
-            at_right_edg_R14H = 1'b1;
-        else at_right_edg_R14H = 1'b0;
-
-        if (sample_R14S[1] == box_R14S[1][1])
-            at_top_edg_R14H = 1'b1;
-        else at_top_edg_R14H = 1'b0;
-
-        if (sample_R14S == box_R14S[1])
-            at_end_box_R14H = 1'b1;
-        else at_end_box_R14H = 1'b0;
-
+        at_right_edg_R14H = (sample_R14S[0] == box_R14S[1][0]);
+        at_top_edg_R14H = (sample_R14S[1] == box_R14S[1][1]);
+        at_end_box_R14H = (sample_R14S == box_R14S[1]);
         // END CODE HERE
     end
 
@@ -337,31 +319,31 @@ if(MOD_FSM == 0) begin // Using baseline FSM
                 next_state_R14H = validTri_R13H ? TEST_STATE : WAIT_STATE;
             end
             TEST_STATE : begin
+                next_state_R14H = (at_end_box_R14H ? WAIT_STATE : TEST_STATE);  
                 next_box_R14S = box_R14S;
-                next_tri_R14S = tri_R14S; //iffy about this
-                next_color_R14U = color_R14U;
-
-                
-                if (!at_right_edg_R14H && !at_end_box_R14H) begin
-                    next_sample_R14S = next_rt_samp_R14S;
-                    next_validSamp_R14H = 1'b1;
-                    next_halt_RnnnnL = 1'b0;
-                    next_state_R14H = TEST_STATE;
-                end
-                else if (!at_end_box_R14H && at_right_edg_R14H) begin
-                    next_sample_R14S = next_up_samp_R14S;
-                    next_validSamp_R14H = 1'b1;
-                    next_halt_RnnnnL = 1'b0;
-                    next_state_R14H = TEST_STATE;
-                end
-                else begin
-                //else if (at_right_edg_R14H && at_top_edg_R14H && at_end_box_R14H) begin
+                next_tri_R14S = tri_R14S; 
+                next_color_R14U = color_R14U;                  
+                unique case(1'b1)
+                    !at_right_edg_R14H & !at_end_box_R14H: begin
+                        //if (!at_right_edg_R14H && !at_end_box_R14H) begin
+                        next_sample_R14S = next_rt_samp_R14S;
+                        next_validSamp_R14H = 1'b1;
+                        next_halt_RnnnnL = 1'b0;
+                        
+                    end
+                    !at_end_box_R14H & at_right_edg_R14H: begin
+                    //else if (!at_end_box_R14H && at_right_edg_R14H) begin
+                        next_sample_R14S = next_up_samp_R14S;
+                        next_validSamp_R14H = 1'b1;
+                        next_halt_RnnnnL = 1'b0;
+                        end
+                    at_end_box_R14H: begin
+                    //else begin
                     next_sample_R14S = box_R14S[0]; //ll bbox
                     next_validSamp_R14H = 1'b0;
                     next_halt_RnnnnL = 1'b1;
-                    next_state_R14H = WAIT_STATE;
-                end
-                
+                    end
+                endcase
             end
         endcase
         // END CODE HERE
