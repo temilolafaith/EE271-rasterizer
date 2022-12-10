@@ -168,9 +168,10 @@ module bbox
     // End output for retiming registers
 
     // ********** Step 0:  Backface Culling**********
-    logic backface; 
-    logic bubblesmash_halt;
+    logic backface;
+    logic bubblesmash;
     //Backfacing if (x1-x0)(y2-y1) > (x2-x1)(y1-y0)
+    assign backface = ((tri_R10S[1][0] - tri_R10S[0][0])*(tri_R10S[2][1]-tri_R10S[1][1]) > (tri_R10S[2][0] - tri_R10S[1][0])*(tri_R10S[1][1]-tri_R10S[0][1]));
     //ssign backface = (tri_R10S[1][0][SIGFIG-1:0] - tri_R10S[0][0][SIGFIG-1:0])*(tri_R10S[2][1][SIGFIG-1:0]-tri_R10S[1][1][SIGFIG-1:0]) > (tri_R10S[2][0][SIGFIG-1:0] - tri_R10S[1][0][SIGFIG-1:0])*(tri_R10S[1][1][SIGFIG-1:0]-tri_R10S[0][1][SIGFIG-1:0]);
 
 
@@ -348,27 +349,29 @@ module bbox
     // outvalid_R10H high if validTri_R10H && BBox is valid
     //logic halt_valid_control;
     
-    assign backface = (tri_R10S[1][0] - tri_R10S[0][0])*(tri_R10S[2][1]-tri_R10S[1][1]) > (tri_R10S[2][0] - tri_R10S[1][0])*(tri_R10S[1][1]-tri_R10S[0][1]);
-
+ 
     
     always_comb begin
 
         //////// ASSIGN "out_box_R10S" and "outvalid_R10H"
         // START CODE HERE (use 24'b0???)
-         
+        // assign out_box_R10S[1][0] = (rounded_box_R10S[1][0] < screen_RnnnnS[0]) ? rounded_box_R10S[1][0] : screen_RnnnnS[0];
+        // assign out_box_R10S[1][1] = (rounded_box_R10S[1][1] < screen_RnnnnS[1]) ? rounded_box_R10S[1][1] : screen_RnnnnS[1];
+        // assign out_box_R10S[0][0] = (rounded_box_R10S[0][0] > 1'b0) ? rounded_box_R10S[0][0] : 1'b0;
+        // assign out_box_R10S[0][1] = (rounded_box_R10S[0][1] > 1'b0) ? rounded_box_R10S[0][1] : 1'b0;        
         out_box_R10S[0][0] = (box_R10S[0][0] >= 0) ? rounded_box_R10S[0][0] : 0;
         out_box_R10S[0][1] = (box_R10S[0][1] >= 0) ? rounded_box_R10S[0][1] : 0;
 
         out_box_R10S[1][0] = (box_R10S[1][0] <= screen_RnnnnS[0]) ? rounded_box_R10S[1][0] : screen_RnnnnS[0];
         out_box_R10S[1][1] = (box_R10S[1][1] <= screen_RnnnnS[1]) ? rounded_box_R10S[1][1] : screen_RnnnnS[1];
 
-        //change to some sort of and to remove if-else   
        if ((out_box_R10S[0][0] >= 0) && (out_box_R10S[0][1] >= 0) && (out_box_R10S[1][0] <= screen_RnnnnS[0]) && (out_box_R10S[1][1] <= screen_RnnnnS[1] && validTri_R10H && !backface))
             outvalid_R10H = 1'b1;
         else
             outvalid_R10H = 1'b0;    
-
-        bubblesmash_halt = halt_RnnnnL || !validTri_R13H;            
+        // outvalid_R10H = (out_box_R10S[0][0] >= 0) && (out_box_R10S[0][1] >= 0) && (out_box_R10S[1][0] <= screen_RnnnnS[0]) && (out_box_R10S[1][1] <= screen_RnnnnS[1] && validTri_R10H && !backface);
+        bubblesmash = halt_RnnnnL || !validTri_R13H;
+        //change to some sort of and to remove if-else   
         // END CODE HERE    
     end
 
@@ -384,6 +387,7 @@ module bbox
     //Assertion for checking if outvalid_R10H has been assigned properly
     assert property( @(posedge clk) (outvalid_R10H |-> out_box_R10S[1][0] <= screen_RnnnnS[0]));
     assert property( @(posedge clk) (outvalid_R10H |-> out_box_R10S[1][1] <= screen_RnnnnS[1]));
+    //assert property( @(posedge clk) !halt_RnnnnL |-> !outvalid_R10H);
 
     // ***************** End of Step 3 *********************
 
@@ -398,7 +402,7 @@ module bbox
     (
         .clk    (clk                ),
         .reset  (rst                ),
-        .en     (bubblesmash_halt        ),
+        .en     (bubblesmash        ),
         .in     (tri_R10S          ),
         .out    (tri_R13S_retime   )
     );
@@ -413,7 +417,7 @@ module bbox
     (
         .clk    (clk                ),
         .reset  (rst                ),
-        .en     (bubblesmash_halt        ),
+        .en     (bubblesmash        ),
         .in     (color_R10U         ),
         .out    (color_R13U_retime  )
     );
@@ -429,7 +433,7 @@ module bbox
     (
         .clk    (clk            ),
         .reset  (rst            ),
-        .en     (bubblesmash_halt    ),
+        .en     (bubblesmash    ),
         .in     (out_box_R10S   ),
         .out    (box_R13S_retime)
     );
@@ -443,7 +447,7 @@ module bbox
     (
         .clk    (clk                    ),
         .reset  (rst                    ),
-        .en     (bubblesmash_halt            ),
+        .en     (bubblesmash            ),
         .in     (outvalid_R10H          ),
         .out    (validTri_R13H_retime   )
     );
@@ -461,7 +465,7 @@ module bbox
     (
         .clk    (clk                ),
         .reset  (rst                ),
-        .en     (bubblesmash_halt        ),
+        .en     (bubblesmash        ),
         .in     (tri_R13S_retime    ),
         .out    (tri_R13S           )
     );
@@ -476,7 +480,7 @@ module bbox
     (
         .clk    (clk                ),
         .reset  (rst                ),
-        .en     (bubblesmash_halt        ),
+        .en     (bubblesmash        ),
         .in     (color_R13U_retime  ),
         .out    (color_R13U         )
     );
@@ -492,7 +496,7 @@ module bbox
     (
         .clk    (clk            ),
         .reset  (rst            ),
-        .en     (bubblesmash_halt    ),
+        .en     (bubblesmash    ),
         .in     (box_R13S_retime),
         .out    (box_R13S       )
     );
@@ -506,7 +510,7 @@ module bbox
     (
         .clk    (clk                    ),
         .reset  (rst                    ),
-        .en     (bubblesmash_halt            ),
+        .en     (bubblesmash            ),
         .in     (validTri_R13H_retime   ),
         .out    (validTri_R13H          )
     );
