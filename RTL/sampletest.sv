@@ -135,7 +135,7 @@ module sampletest
         dist_lg_R16S[2] = tri_shift_R16S_trunc[2][0]*tri_shift_R16S_trunc[0][1] - tri_shift_R16S_trunc[0][0]*tri_shift_R16S_trunc[2][1]; //e0_dist
 
         // (4) Check distance and assign hit_valid_R16H.
-        hit_valid_R16H = (dist_lg_R16S[0] <= 0) && (dist_lg_R16S[1] < 0) && (dist_lg_R16S[2] <= 0);
+        hit_valid_R16H = (dist_lg_R16S[0] <= 0) && (dist_lg_R16S[1] < 0) && (dist_lg_R16S[2] <= 0) && validSamp_R16H;
     end 
 
     // END CODE HERE
