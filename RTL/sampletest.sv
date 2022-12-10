@@ -1,238 +1,531 @@
 /*
- *  Performs Sample Test on triangle
+ * Bounding Box Module
  *
- *  Inputs:
- *    Sample and triangle Information
+ * Inputs:
+ *   3 x,y,z vertices corresponding to tri
+ *   1 valid bit, indicating triangle is valid data
  *
- *  Outputs:
- *    Subsample Hit Flag, Subsample location, and triangle Information
+ *  Config Inputs:
+ *   2 x,y vertices indicating screen dimensions
+ *   1 integer representing square root of SS (16MSAA->4)
+ *      we will assume config values are held in some
+ *      register and are valid given a valid triangle
  *
- *  Function:
- *    Utilizing Edge Equations determine whether the
- *    sample location lies inside the triangle.
- *    In the simple case of the triangle, this will
- *    occur when the sample lies to one side of all
- *    three lines (either all left or all right).
- *    This corresponds to the minterm 000 and 111.
- *    Additionally, if backface culling is performed,
- *    then only keep the case of all right.
+ *  Control Input:
+ *   1 halt signal indicating that no work should be done
  *
- *  Edge Equation:
- *    For an edge defined as travelling from the
- *    vertice (x_1,y_1) to (x_2,y_2), the sample
- *    (x_s,y_s) lies to the right of the line
- *    if the following expression is true:
+ * Outputs:
+ *   2 vertices describing a clamped bounding box
+ *   1 Valid signal indicating that bounding
+ *           box and triangle value is valid
+ *   3 x,y vertices corresponding to tri
  *
- *    0 >  ( x_2 - x_1 ) * ( y_s - y_1 ) - ( x_s - x_1 ) * ( y_2 - y_1 )
+ * Global Signals:
+ *   clk, rst
  *
- *    otherwise it lies on the line (exactly 0) or
- *    to the left of the line.
+ * Function:
+ *   Determine a bounding box for the triangle
+ *   represented by the vertices.
  *
- *    This block evaluates the six edges described by the
- *    triangles vertices,  to determine which
- *    side of the lines the sample point lies.  Then it
- *    determines if the sample point lies in the triangle
- *    by or'ing the appropriate minterms.  In the case of
- *    the triangle only three edges are relevant.  In the
- *    case of the quadrilateral five edges are relevant.
+ *   Clamp the Bounding Box to the subsample pixel
+ *   space
+ *
+ *   Clip the Bounding Box to Screen Space
+ *
+ *   Halt operating but retain values if next stage is busy
+ *
+ *
+ * Long Description:
+ *   This bounding box block accepts a triangle described with three
+ *   vertices and determines a set of sample points to test against
+ *   the triangle.  These sample points correspond to the
+ *   either the pixels in the final image or the pixel fragments
+ *   that compose the pixel if multisample anti-aliasing (MSAA)
+ *   is enabled.
+ *
+ *   The inputs to the box are clocked with a bank of dflops.
+ *
+ *   After the data is clocked, a bounding box is determined
+ *   for the triangle. A bounding box can be determined
+ *   through calculating the maxima and minima for x and y to
+ *   generate a lower left vertice and upper right
+ *   vertice.  This data is then clocked.
+ *
+ *   The bounding box next needs to be clamped to the fragment grid.
+ *   This can be accomplished through rounding the bounding box values
+ *   to the fragment grid.  Additionally, any sample points that exist
+ *   outside of screen space should be rejected.  So the bounding box
+ *   can be clipped to the visible screen space.  This clipping is done
+ *   using the screen signal.
+ *
+ *   The Halt signal is utilized to hold the current triangle bounding box.
+ *   This is because one bounding box operation could correspond to
+ *   multiple sample test operations later in the pipe.  As these samples
+ *   can take a number of cycles to complete, the data held in the bounding
+ *   box stage needs to be preserved.  The halt signal is also required for
+ *   when the write device is full/busy.
+ *
+ *   The valid signal is utilized to indicate whether or not a triangle
+ *   is actual data.  This can be useful if the device being read from,
+ *   has no more triangles.
+ *
  *
  *
  *   Author: John Brunhaver
  *   Created:      Thu 07/23/09
- *   Last Updated: Tue 10/06/10
+ *   Last Updated: Fri 09/30/10
  *
  *   Copyright 2009 <jbrunhaver@gmail.com>
- *
- *
  */
+
 
 /* A Note on Signal Names:
  *
  * Most signals have a suffix of the form _RxxxxN
  * where R indicates that it is a Raster Block signal
  * xxxx indicates the clock slice that it belongs to
- * and N indicates the type of signal that it is.
- * H indicates logic high, L indicates logic low,
- * U indicates unsigned fixed point, and S indicates
- * signed fixed point.
+ * N indicates the type of signal that it is.
+ *    H indicates logic high,
+ *    L indicates logic low,
+ *    U indicates unsigned fixed point,
+ *    S indicates signed fixed point.
+ *
+ * For all the signed fixed point signals (logic signed [SIGFIG-1:0]),
+ * their highest `$sig_fig-$radix` bits, namely [`$sig_fig-1`:RADIX]
+ * represent the integer part of the fixed point number,
+ * while the lowest RADIX bits, namely [`$radix-1`:0]
+ * represent the fractional part of the fixed point number.
+ *
+ *
+ *
+ * For signal subSample_RnnnnU (logic [3:0])
+ * 1000 for  1x MSAA eq to 1 sample per pixel
+ * 0100 for  4x MSAA eq to 4 samples per pixel,
+ *              a sample is half a pixel on a side
+ * 0010 for 16x MSAA eq to 16 sample per pixel,
+ *              a sample is a quarter pixel on a side.
+ * 0001 for 64x MSAA eq to 64 samples per pixel,
+ *              a sample is an eighth of a pixel on a side.
  *
  */
 
-module sampletest
+module bbox
 #(
     parameter SIGFIG        = 24, // Bits in color and position.
     parameter RADIX         = 10, // Fraction bits in color and position
     parameter VERTS         = 3, // Maximum Vertices in triangle
     parameter AXIS          = 3, // Number of axis foreach vertex 3 is (x,y,z).
     parameter COLORS        = 3, // Number of color channels
-    parameter PIPE_DEPTH    = 2 // How many pipe stages are in this block
+    parameter PIPE_DEPTH    = 3 // How many pipe stages are in this block
 )
 (
-    input logic signed [SIGFIG-1:0]     tri_R16S[VERTS-1:0][AXIS-1:0], // triangle to Iterate Over
-    input logic unsigned [SIGFIG-1:0]   color_R16U[COLORS-1:0] , // Color of triangle
-    input logic signed [SIGFIG-1:0]     sample_R16S[1:0], // Sample Location
-    input logic                         validSamp_R16H, // A valid sample location
+    //Input Signals
+    input logic signed [SIGFIG-1:0]     tri_R10S[VERTS-1:0][AXIS-1:0] , // Sets X,Y Fixed Point Values
+    input logic unsigned [SIGFIG-1:0]   color_R10U[COLORS-1:0] , // Color of Tri
+    input logic                             validTri_R10H , // Valid Data for Operation
 
+    //Control Signals
+    input logic                         halt_RnnnnL , // Indicates No Work Should Be Done
+    input logic signed [SIGFIG-1:0] screen_RnnnnS[1:0] , // Screen Dimensions
+    input logic [3:0]                   subSample_RnnnnU , // SubSample_Interval
+
+    //Global Signals
     input logic clk, // Clock
     input logic rst, // Reset
 
-    output logic signed [SIGFIG-1:0]    hit_R18S[AXIS-1:0], // Hit Location
-    output logic unsigned [SIGFIG-1:0]  color_R18U[COLORS-1:0] , // Color of triangle
-    output logic                        hit_valid_R18H                   // Is hit good
+    //Outout Signals
+    output logic signed [SIGFIG-1:0]    tri_R13S[VERTS-1:0][AXIS-1:0], // 4 Sets X,Y Fixed Point Values
+    output logic unsigned [SIGFIG-1:0]  color_R13U[COLORS-1:0] , // Color of Tri
+    output logic signed [SIGFIG-1:0]    box_R13S[1:0][1:0], // 2 Sets X,Y Fixed Point Values
+    output logic                            validTri_R13H                  // Valid Data for Operation
 );
 
-    localparam EDGES = (VERTS == 3) ? 3 : 5;
-    //localparam SHORTSF = SIGFIG;
-    localparam SHORTSF = SIGFIG-(RADIX-3);
-    localparam MROUND = (2 * SHORTSF) - RADIX;
 
-    // output for retiming registers
-    logic signed [SIGFIG-1:0]       hit_R18S_retime[AXIS-1:0];   // Hit Location
-    logic unsigned [SIGFIG-1:0]     color_R18U_retime[COLORS-1:0];   // Color of triangle
-    logic                           hit_valid_R18H_retime;   // Is hit good
-    // output for retiming registers
+    //Signals In Clocking Order
 
-    // Signals in Access Order
-    logic signed [SIGFIG-1:0]       tri_shift_R16S[VERTS-1:0][1:0]; // triangle after coordinate shift
-    logic signed [SIGFIG-1:0]       edge_R16S[EDGES-1:0][1:0][1:0]; // Edges
-    logic signed [(2*SHORTSF)-1:0]  dist_lg_R16S[EDGES-1:0]; // Result of x_1 * y_2 - x_2 * y_1
-    logic                           hit_valid_R16H ; // Output (YOUR JOB!)
-    logic signed [SIGFIG-1:0]       hit_R16S[AXIS-1:0]; // Sample position
-    // Signals in Access Order
+    //Begin R10 Signals
 
-    // Your job is to produce the value for hit_valid_R16H signal, which indicates whether a sample lies inside the triangle.
-    // hit_valid_R16H is high if validSamp_R16H && sample inside triangle (with back face culling)
-    // Consider the following steps:
+    // Step 1 Result: LL and UR X, Y Fixed Point Values determined by calculating min/max vertices
+    // box_R10S[0][0]: LL X
+    // box_R10S[0][1]: LL Y
+    // box_R10S[1][0]: UR X
+    // box_R10S[1][1]: UR Y
+    logic signed [SIGFIG-1:0]   box_R10S[1:0][1:0];
+    // Step 2 Result: LL and UR Rounded Down to SubSample Interval
+    logic signed [SIGFIG-1:0]   rounded_box_R10S[1:0][1:0];
+    // Step 3 Result: LL and UR X, Y Fixed Point Values after Clipping
+    logic signed [SIGFIG-1:0]   out_box_R10S[1:0][1:0];      // bounds for output
+    // Step 3 Result: valid if validTri_R10H && BBox within screen
+    logic                           outvalid_R10H;               // output is valid
+
+    //End R10 Signals
+
+    // Begin output for retiming registers
+    logic signed [SIGFIG-1:0]   tri_R13S_retime[VERTS-1:0][AXIS-1:0]; // 4 Sets X,Y Fixed Point Values
+    logic unsigned [SIGFIG-1:0] color_R13U_retime[COLORS-1:0];        // Color of Tri
+    logic signed [SIGFIG-1:0]   box_R13S_retime[1:0][1:0];             // 2 Sets X,Y Fixed Point Values
+    logic                           validTri_R13H_retime ;                 // Valid Data for Operation
+    // End output for retiming registers
+
+    // ********** Step 0:  Backface Culling**********
+    logic backface; 
+    logic bubblesmash_halt;
+    //Backfacing if (x1-x0)(y2-y1) > (x2-x1)(y1-y0)
+    //ssign backface = (tri_R10S[1][0][SIGFIG-1:0] - tri_R10S[0][0][SIGFIG-1:0])*(tri_R10S[2][1][SIGFIG-1:0]-tri_R10S[1][1][SIGFIG-1:0]) > (tri_R10S[2][0][SIGFIG-1:0] - tri_R10S[1][0][SIGFIG-1:0])*(tri_R10S[1][1][SIGFIG-1:0]-tri_R10S[0][1][SIGFIG-1:0]);
+
+
+    // ********** Step 1:  Determining a Bounding Box **********
+    // Here you need to determine the bounding box by comparing the vertices
+    // and assigning box_R10S to be the proper coordinates
 
     // START CODE HERE
-    // (1) Shift X, Y coordinates such that the fragment resides on the (0,0) position.
-    // (2) Organize edges (form three edges for triangles)
-    // (3) Calculate distance x_1 * y_2 - x_2 * y_1
-    // (4) Check distance and assign hit_valid_R16H.
+
+    // This select signal structure may help you in selecting your bbox coordinates
+    logic [2:0] bbox_sel_R10H [1:0][1:0];
+ 
+    // The above structure consists of a 3-bit select signal for each coordinate of the 
+    // bouding box. The leftmost [1:0] dimensions refer to LL/UR, while the rightmost 
+    // [1:0] dimensions refer to X or Y coordinates. Each select signal should be a 3-bit 
+    // one-hot signal, where the bit that is high represents which one of the 3 triangle vertices 
+    // should be chosen for that bbox coordinate. As an example, if we have: bbox_sel_R10H[0][0] = 3'b001
+    // then this indicates that the lower left x-coordinate of your bounding box should be assigned to the 
+    // x-coordinate of triangle "vertex a". 
+    
+    //  DECLARE ANY OTHER SIGNALS YOU NEED
+    // logic unsigned [2:0] mask; // mask used to bit and with box_R10S[i][j][RADIX-1:0] (fractional part)
+    // Try declaring an always_comb block to assign values to box_R10S
+    logic vert_cmp[1:0][2:0]; //compare vertices 
+
     always_comb begin
-        //(1) Shift X, Y coordinates such that the fragment resides on the (0,0) position.
-        tri_shift_R16S[0][0] = tri_R16S[0][0] - sample_R16S[0]; //v0, x
-        tri_shift_R16S[1][0] = tri_R16S[1][0] - sample_R16S[0]; //v1, x
-        tri_shift_R16S[2][0] = tri_R16S[2][0] - sample_R16S[0]; //v2, x
 
-        tri_shift_R16S[0][1] = tri_R16S[0][1] - sample_R16S[1]; //v0, y
-        tri_shift_R16S[1][1] = tri_R16S[1][1] - sample_R16S[1]; //v1, y
-        tri_shift_R16S[2][1] = tri_R16S[2][1] - sample_R16S[1]; //v2, y
+        vert_cmp[0][0] = tri_R10S[0][0] < tri_R10S[1][0];
+        vert_cmp[0][1] = tri_R10S[0][0] < tri_R10S[2][0];
+        vert_cmp[0][2] = tri_R10S[1][0] < tri_R10S[2][0];
+        
+        vert_cmp[1][0] = tri_R10S[0][1] < tri_R10S[1][1];
+        vert_cmp[1][1] = tri_R10S[0][1] < tri_R10S[2][1];
+        vert_cmp[1][2] = tri_R10S[1][1] < tri_R10S[2][1];
+        //x
+        bbox_sel_R10H[0][0][0] =  vert_cmp[0][0] &  vert_cmp[0][1] ;       
+        bbox_sel_R10H[0][0][1] = ~vert_cmp[0][0] &  vert_cmp[0][2] ; 
+        bbox_sel_R10H[0][0][2] = ~vert_cmp[0][1] & ~vert_cmp[0][2] ; 
+        bbox_sel_R10H[1][0][0] = ~vert_cmp[0][0] & ~vert_cmp[0][1] ; 
+        bbox_sel_R10H[1][0][1] =  vert_cmp[0][0] & ~vert_cmp[0][2] ; 
+        bbox_sel_R10H[1][0][2] =  vert_cmp[0][1] &  vert_cmp[0][2] ; 
+        
+        // Y
+        bbox_sel_R10H[0][1][0] =  vert_cmp[1][0] &  vert_cmp[1][1]  ; 
+        bbox_sel_R10H[0][1][1] = ~vert_cmp[1][0] &  vert_cmp[1][2]  ; 
+        bbox_sel_R10H[0][1][2] = ~vert_cmp[1][1] & ~vert_cmp[1][2]  ; 
+        bbox_sel_R10H[1][1][0] = ~vert_cmp[1][0] & ~vert_cmp[1][1]  ; 
+        bbox_sel_R10H[1][1][1] =  vert_cmp[1][0] & ~vert_cmp[1][2]  ; 
+        bbox_sel_R10H[1][1][2] =  vert_cmp[1][1] &  vert_cmp[1][2]  ; 
 
-        // (3) Calculate distance x_1 * y_2 - x_2 * y_1
-        dist_lg_R16S[0] = tri_shift_R16S[0][0]*tri_shift_R16S[1][1] - tri_shift_R16S[1][0]*tri_shift_R16S[0][1]; //e0_dist
-        dist_lg_R16S[1] = tri_shift_R16S[1][0]*tri_shift_R16S[2][1] - tri_shift_R16S[2][0]*tri_shift_R16S[1][1]; //e1_dist
-        dist_lg_R16S[2] = tri_shift_R16S[2][0]*tri_shift_R16S[0][1]- tri_shift_R16S[0][0]*tri_shift_R16S[2][1]; //e0_dist
+        case(bbox_sel_R10H[0][0])
+            3'b001: box_R10S[0][0] = tri_R10S[0][0];
+            3'b010: box_R10S[0][0] = tri_R10S[1][0];
+            3'b100: box_R10S[0][0] = tri_R10S[2][0];
+            default: box_R10S[0][0] = tri_R10S[0][0];
+        endcase
 
-        // (4) Check distance and assign hit_valid_R16H.
-        hit_valid_R16H = (dist_lg_R16S[0] <= 0) && (dist_lg_R16S[1] < 0) && (dist_lg_R16S[2] <= 0);
-    end 
+        case(bbox_sel_R10H[0][1])
+            3'b001: box_R10S[0][1] = tri_R10S[0][1];
+            3'b010: box_R10S[0][1] = tri_R10S[1][1];
+            3'b100: box_R10S[0][1] = tri_R10S[2][1];
+            default: box_R10S[0][1] = tri_R10S[0][1];
+        endcase
+
+        case(bbox_sel_R10H[1][0])
+            3'b001: box_R10S[1][0] = tri_R10S[0][0];
+            3'b010: box_R10S[1][0] = tri_R10S[1][0];
+            3'b100: box_R10S[1][0] = tri_R10S[2][0];
+            default: box_R10S[1][0] = tri_R10S[0][0];
+        endcase
+
+        case(bbox_sel_R10H[1][1])
+            3'b001: box_R10S[1][1] = tri_R10S[0][1];
+            3'b010: box_R10S[1][1] = tri_R10S[1][1];
+            3'b100: box_R10S[1][1] = tri_R10S[2][1];
+            default: box_R10S[1][1] = tri_R10S[0][1];
+        endcase
+    end
+    
 
     // END CODE HERE
 
-    //Assertions to help debug
-    //Check if correct inequalities have been used
-    assert property( @(posedge clk) (dist_lg_R16S[1] == 0) |-> !hit_valid_R16H);
+    // Assertions to check if box_R10S is assigned properly
+    // We want to check the following properties:
+    // 1) Each of the coordinates box_R10S are always and uniquely assigned
+    // 2) Upper right coordinate is never less than lower left
 
-    //Calculate Depth as depth of first vertex
-    // Note that a barrycentric interpolation would
-    // be more accurate
+    // START CODE HERE
+    //Assertions to check if all cases are covered and assignments are unique 
+    // (already done for you if you use the bbox_sel_R10H select signal as declared)
+    assert property(@(posedge clk) $onehot(bbox_sel_R10H[0][0]));
+    assert property(@(posedge clk) $onehot(bbox_sel_R10H[0][1]));
+    assert property(@(posedge clk) $onehot(bbox_sel_R10H[1][0]));
+    assert property(@(posedge clk) $onehot(bbox_sel_R10H[1][1]));
+
+    //Assertions to check UR is never less than LL and that box is valid (assign validTri_R10H???)
+    // START CODE HERE
+    assert property (@(posedge clk) (box_R10S[0][0] <= box_R10S[1][0]) | !validTri_R10H);
+    assert property (@(posedge clk) (box_R10S[0][1] <= box_R10S[1][1]) | !validTri_R10H);
+
+    // END CODE HERE
+
+
+    // ***************** End of Step 1 *********************
+
+
+    // ********** Step 2:  Round Values to Subsample Interval **********
+
+    // We will use the floor operation for rounding.
+    // To floor a signal, we simply turn all of the bits
+    // below a specific RADIX to 0.
+    // The complication here is that there are 4 setting.
+    // 1x MSAA eq. to 1 sample per pixel
+    // 4x MSAA eq to 4 samples per pixel, a sample is
+    // half a pixel on a side
+    // 16x MSAA eq to 16 sample per pixel, a sample is
+    // a quarter pixel on a side.
+    // 64x MSAA eq to 64 samples per pixel, a sample is
+    // an eighth of a pixel on a side.
+
+    // Note: Cleverly converting the MSAA signal
+    //       to a mask would allow you to do this operation
+    //       as a bitwise and operation.
+
+    //Round LowerLeft and UpperRight for X and Y
+    generate
+        for(genvar i = 0; i < 2; i = i + 1) begin
+            for(genvar j = 0; j < 2; j = j + 1) begin
+
+                always_comb begin
+                    //Integer Portion of LL and UR Remains the Same
+                    rounded_box_R10S[i][j][SIGFIG-1:RADIX] = box_R10S[i][j][SIGFIG-1:RADIX];
+                    //////// ASSIGN FRACTIONAL PORTION
+                    // START CODE HERE
+                    unique case (subSample_RnnnnU)
+                        4'b1000 : begin
+                            rounded_box_R10S[i][j][RADIX-1:0] = {RADIX{1'b0}};
+                        end
+                        4'b0100 : begin
+                            rounded_box_R10S[i][j][RADIX-1] = box_R10S[i][j][RADIX-1] ;
+                            rounded_box_R10S[i][j][RADIX-2:0] = {RADIX-1{1'b0}};
+                        end
+                        4'b0010 : begin
+                            rounded_box_R10S[i][j][RADIX-1:RADIX-2] = box_R10S[i][j][RADIX-1:RADIX-2];
+                            rounded_box_R10S[i][j][RADIX-3:0] = {RADIX-2{1'b0}};
+                        end
+                        4'b0001 : begin
+                            rounded_box_R10S[i][j][RADIX-1:RADIX-3] = box_R10S[i][j][RADIX-1:RADIX-3];
+                            rounded_box_R10S[i][j][RADIX-4:0] = {RADIX-3{1'b0}};
+                        end
+                    endcase
+                    // END CODE HERE
+
+                end // always_comb
+
+            end
+        end
+    endgenerate
+
+    //Assertion to help you debug errors in rounding
+    assert property( @(posedge clk) (box_R10S[0][0] - rounded_box_R10S[0][0]) <= {subSample_RnnnnU,7'b0});
+    assert property( @(posedge clk) (box_R10S[0][1] - rounded_box_R10S[0][1]) <= {subSample_RnnnnU,7'b0});
+    assert property( @(posedge clk) (box_R10S[1][0] - rounded_box_R10S[1][0]) <= {subSample_RnnnnU,7'b0});
+    assert property( @(posedge clk) (box_R10S[1][1] - rounded_box_R10S[1][1]) <= {subSample_RnnnnU,7'b0});
+
+    // ***************** End of Step 2 *********************
+
+
+    // ********** Step 3:  Clipping or Rejection **********
+
+    // Clamp if LL is down/left of screen origin
+    // Clamp if UR is up/right of Screen
+    // Invalid if BBox is up/right of Screen
+    // Invalid if BBox is down/left of Screen
+    // outvalid_R10H high if validTri_R10H && BBox is valid
+    //logic halt_valid_control;
+    
+    assign backface = (tri_R10S[1][0] - tri_R10S[0][0])*(tri_R10S[2][1]-tri_R10S[1][1]) > (tri_R10S[2][0] - tri_R10S[1][0])*(tri_R10S[1][1]-tri_R10S[0][1]);
+
+    
     always_comb begin
-        hit_R16S[1:0] = sample_R16S[1:0]; //Make sure you use unjittered sample
-        hit_R16S[2] = tri_R16S[0][2]; // z value equals the z value of the first vertex
+
+        //////// ASSIGN "out_box_R10S" and "outvalid_R10H"
+        // START CODE HERE (use 24'b0???)
+         
+        out_box_R10S[0][0] = (box_R10S[0][0] >= 0) ? rounded_box_R10S[0][0] : 0;
+        out_box_R10S[0][1] = (box_R10S[0][1] >= 0) ? rounded_box_R10S[0][1] : 0;
+
+        out_box_R10S[1][0] = (box_R10S[1][0] <= screen_RnnnnS[0]) ? rounded_box_R10S[1][0] : screen_RnnnnS[0];
+        out_box_R10S[1][1] = (box_R10S[1][1] <= screen_RnnnnS[1]) ? rounded_box_R10S[1][1] : screen_RnnnnS[1];
+
+        //change to some sort of and to remove if-else   
+       if ((out_box_R10S[0][0] >= 0) && (out_box_R10S[0][1] >= 0) && (out_box_R10S[1][0] <= screen_RnnnnS[0]) && (out_box_R10S[1][1] <= screen_RnnnnS[1] && validTri_R10H && !backface))
+            outvalid_R10H = 1'b1;
+        else
+            outvalid_R10H = 1'b0;    
+
+        bubblesmash_halt = halt_RnnnnL || !validTri_R13H;            
+        // END CODE HERE    
     end
 
-    /* Flop R16 to R18_retime with retiming registers*/
-    dff2 #(
-        .WIDTH          (SIGFIG         ),
-        .ARRAY_SIZE     (AXIS           ),
-        .PIPE_DEPTH     (PIPE_DEPTH - 1 ),
-        .RETIME_STATUS  (1              )
-    )
-    d_samp_r1
-    (
-        .clk    (clk            ),
-        .reset  (rst            ),
-        .en     (1'b1           ),
-        .in     (hit_R16S       ),
-        .out    (hit_R18S_retime)
-    );
+    //Assertions to check BBox is not totally out of screen
+    assert property( @(posedge clk) (out_box_R10S[0][0] >= 0));
+    assert property( @(posedge clk) (out_box_R10S[0][1] >= 0));
+    assert property( @(posedge clk) (out_box_R10S[1][0] <= screen_RnnnnS[0]));
+    assert property( @(posedge clk) (out_box_R10S[1][1] <= screen_RnnnnS[1]));
 
-    dff2 #(
-        .WIDTH          (SIGFIG         ),
-        .ARRAY_SIZE     (COLORS         ),
-        .PIPE_DEPTH     (PIPE_DEPTH - 1 ),
-        .RETIME_STATUS  (1              )
+
+
+
+    //Assertion for checking if outvalid_R10H has been assigned properly
+    assert property( @(posedge clk) (outvalid_R10H |-> out_box_R10S[1][0] <= screen_RnnnnS[0]));
+    assert property( @(posedge clk) (outvalid_R10H |-> out_box_R10S[1][1] <= screen_RnnnnS[1]));
+
+    // ***************** End of Step 3 *********************
+
+    dff3 #(
+        .WIDTH(SIGFIG),
+        .ARRAY_SIZE1(VERTS),
+        .ARRAY_SIZE2(AXIS),
+        .PIPE_DEPTH(PIPE_DEPTH - 1),
+        .RETIME_STATUS(1)
     )
-    d_samp_r2
+    d_bbx_r1
     (
         .clk    (clk                ),
         .reset  (rst                ),
-        .en     (1'b1               ),
-        .in     (color_R16U         ),
-        .out    (color_R18U_retime  )
+        .en     (bubblesmash_halt        ),
+        .in     (tri_R10S          ),
+        .out    (tri_R13S_retime   )
+    );
+
+    dff2 #(
+        .WIDTH(SIGFIG),
+        .ARRAY_SIZE(COLORS),
+        .PIPE_DEPTH(PIPE_DEPTH - 1),
+        .RETIME_STATUS(1)
+    )
+    d_bbx_r2
+    (
+        .clk    (clk                ),
+        .reset  (rst                ),
+        .en     (bubblesmash_halt        ),
+        .in     (color_R10U         ),
+        .out    (color_R13U_retime  )
+    );
+
+    dff3 #(
+        .WIDTH(SIGFIG),
+        .ARRAY_SIZE1(2),
+        .ARRAY_SIZE2(2),
+        .PIPE_DEPTH(PIPE_DEPTH - 1),
+        .RETIME_STATUS(1)
+    )
+    d_bbx_r3
+    (
+        .clk    (clk            ),
+        .reset  (rst            ),
+        .en     (bubblesmash_halt    ),
+        .in     (out_box_R10S   ),
+        .out    (box_R13S_retime)
     );
 
     dff_retime #(
-        .WIDTH          (1              ),
-        .PIPE_DEPTH     (PIPE_DEPTH - 1 ),
-        .RETIME_STATUS  (1              ) // RETIME
+        .WIDTH(1),
+        .PIPE_DEPTH(PIPE_DEPTH - 1),
+        .RETIME_STATUS(1) // Retime
     )
-    d_samp_r3
+    d_bbx_r4
     (
         .clk    (clk                    ),
         .reset  (rst                    ),
-        .en     (1'b1                   ),
-        .in     (hit_valid_R16H         ),
-        .out    (hit_valid_R18H_retime  )
+        .en     (bubblesmash_halt            ),
+        .in     (outvalid_R10H          ),
+        .out    (validTri_R13H_retime   )
     );
-    /* Flop R16 to R18_retime with retiming registers*/
+    //Flop Clamped Box to R13_retime with retiming registers
 
-    /* Flop R18_retime to R18 with fixed registers */
-    dff2 #(
-        .WIDTH          (SIGFIG ),
-        .ARRAY_SIZE     (AXIS   ),
-        .PIPE_DEPTH     (1      ),
-        .RETIME_STATUS  (0      )
+    //Flop R13_retime to R13 with fixed registers
+    dff3 #(
+        .WIDTH(SIGFIG),
+        .ARRAY_SIZE1(VERTS),
+        .ARRAY_SIZE2(AXIS),
+        .PIPE_DEPTH(1),
+        .RETIME_STATUS(0)
     )
-    d_samp_f1
-    (
-        .clk    (clk            ),
-        .reset  (rst            ),
-        .en     (1'b1           ),
-        .in     (hit_R18S_retime),
-        .out    (hit_R18S       )
-    );
-
-    dff2 #(
-        .WIDTH          (SIGFIG ),
-        .ARRAY_SIZE     (COLORS ),
-        .PIPE_DEPTH     (1      ),
-        .RETIME_STATUS  (0      )
-    )
-    d_samp_f2
+    d_bbx_f1
     (
         .clk    (clk                ),
         .reset  (rst                ),
-        .en     (1'b1               ),
-        .in     (color_R18U_retime  ),
-        .out    (color_R18U         )
+        .en     (bubblesmash_halt        ),
+        .in     (tri_R13S_retime    ),
+        .out    (tri_R13S           )
+    );
+
+    dff2 #(
+        .WIDTH(SIGFIG),
+        .ARRAY_SIZE(COLORS),
+        .PIPE_DEPTH(1),
+        .RETIME_STATUS(0)
+    )
+    d_bbx_f2
+    (
+        .clk    (clk                ),
+        .reset  (rst                ),
+        .en     (bubblesmash_halt        ),
+        .in     (color_R13U_retime  ),
+        .out    (color_R13U         )
+    );
+
+    dff3 #(
+        .WIDTH(SIGFIG),
+        .ARRAY_SIZE1(2),
+        .ARRAY_SIZE2(2),
+        .PIPE_DEPTH(1),
+        .RETIME_STATUS(0)
+    )
+    d_bbx_f3
+    (
+        .clk    (clk            ),
+        .reset  (rst            ),
+        .en     (bubblesmash_halt    ),
+        .in     (box_R13S_retime),
+        .out    (box_R13S       )
     );
 
     dff #(
-        .WIDTH          (1  ),
-        .PIPE_DEPTH     (1  ),
-        .RETIME_STATUS  (0  ) // No retime
+        .WIDTH(1),
+        .PIPE_DEPTH(1),
+        .RETIME_STATUS(0) // No retime
     )
-    d_samp_f3
+    d_bbx_f4
     (
         .clk    (clk                    ),
         .reset  (rst                    ),
-        .en     (1'b1                   ),
-        .in     (hit_valid_R18H_retime  ),
-        .out    (hit_valid_R18H         )
+        .en     (bubblesmash_halt            ),
+        .in     (validTri_R13H_retime   ),
+        .out    (validTri_R13H          )
     );
+    //Flop R13_retime to R13 with fixed registers
 
-    /* Flop R18_retime to R18 with fixed registers */
+    //Error Checking Assertions
+
+    //Define a Less Than Property
+    //
+    //  a should be less than b
+    property rb_lt( rst, a, b, c );
+        @(posedge clk) rst | ((a<=b) | !c);
+    endproperty
+
+    //Check that Lower Left of Bounding Box is less than equal Upper Right
+    assert property( rb_lt( rst, box_R13S[0][0], box_R13S[1][0], validTri_R13H ));
+    assert property( rb_lt( rst, box_R13S[0][1], box_R13S[1][1], validTri_R13H ));
+    //Check that Lower Left of Bounding Box is less than equal Upper Right
+
+    //Error Checking Assertions
 
 endmodule
