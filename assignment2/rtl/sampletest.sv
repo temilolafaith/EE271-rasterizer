@@ -82,7 +82,8 @@ module sampletest
 );
 
     localparam EDGES = (VERTS == 3) ? 3 : 5;
-    localparam SHORTSF = SIGFIG;
+    //localparam SHORTSF = SIGFIG;
+    localparam SHORTSF = SIGFIG-(RADIX-3);
     localparam MROUND = (2 * SHORTSF) - RADIX;
 
     // output for retiming registers
@@ -93,6 +94,8 @@ module sampletest
 
     // Signals in Access Order
     logic signed [SIGFIG-1:0]       tri_shift_R16S[VERTS-1:0][1:0]; // triangle after coordinate shift
+    logic signed [SIGFIG-1:(RADIX-3)]       tri_shift_R16S_trunc[VERTS-1:0][1:0]; // triangle after coordinate shift
+
     logic signed [SIGFIG-1:0]       edge_R16S[EDGES-1:0][1:0][1:0]; // Edges
     logic signed [(2*SHORTSF)-1:0]  dist_lg_R16S[EDGES-1:0]; // Result of x_1 * y_2 - x_2 * y_1
     logic                           hit_valid_R16H ; // Output (YOUR JOB!)
@@ -116,12 +119,20 @@ module sampletest
 
         tri_shift_R16S[0][1] = tri_R16S[0][1] - sample_R16S[1]; //v0, y
         tri_shift_R16S[1][1] = tri_R16S[1][1] - sample_R16S[1]; //v1, y
-        tri_shift_R16S[2][1] = tri_R16S[2][1] - sample_R16S[1]; //v2, y
+        tri_shift_R16S[2][1] = tri_R16S[2][1] - sample_R16S[1]; //v2, y     
+
+        //(1.b) Truncate
+        tri_shift_R16S_trunc[0][0] = tri_shift_R16S[0][0]; //v0, x
+        tri_shift_R16S_trunc[1][0] = tri_shift_R16S[1][0]; //v1, x
+        tri_shift_R16S_trunc[2][0] = tri_shift_R16S[2][0]; //v2, x
+        tri_shift_R16S_trunc[0][1] = tri_shift_R16S[0][1]; //v0, y
+        tri_shift_R16S_trunc[1][1] = tri_shift_R16S[1][1]; //v1, y
+        tri_shift_R16S_trunc[2][1] = tri_shift_R16S[2][1]; //v2, y
 
         // (3) Calculate distance x_1 * y_2 - x_2 * y_1
-        dist_lg_R16S[0] = tri_shift_R16S[0][0]*tri_shift_R16S[1][1] - tri_shift_R16S[1][0]*tri_shift_R16S[0][1]; //e0_dist
-        dist_lg_R16S[1] = tri_shift_R16S[1][0]*tri_shift_R16S[2][1] - tri_shift_R16S[2][0]*tri_shift_R16S[1][1]; //e1_dist
-        dist_lg_R16S[2] = tri_shift_R16S[2][0]*tri_shift_R16S[0][1] - tri_shift_R16S[0][0]*tri_shift_R16S[2][1]; //e0_dist
+        dist_lg_R16S[0] = tri_shift_R16S_trunc[0][0]*tri_shift_R16S_trunc[1][1] - tri_shift_R16S_trunc[1][0]*tri_shift_R16S_trunc[0][1]; //e0_dist
+        dist_lg_R16S[1] = tri_shift_R16S_trunc[1][0]*tri_shift_R16S_trunc[2][1] - tri_shift_R16S_trunc[2][0]*tri_shift_R16S_trunc[1][1]; //e1_dist
+        dist_lg_R16S[2] = tri_shift_R16S_trunc[2][0]*tri_shift_R16S_trunc[0][1] - tri_shift_R16S_trunc[0][0]*tri_shift_R16S_trunc[2][1]; //e0_dist
 
         // (4) Check distance and assign hit_valid_R16H.
         hit_valid_R16H = (dist_lg_R16S[0] <= 0) && (dist_lg_R16S[1] < 0) && (dist_lg_R16S[2] <= 0);
